@@ -1,0 +1,183 @@
+/* ── Numa Mindcare — Global Styles ─────────────────────────────────────────── */
+
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg:            #eee8e0;
+  --surface:       #ffffff;
+  --border:        #ddd5cb;
+  --border-light:  #ede7df;
+  --accent:        #2d6b5f;
+  --accent-dark:   #1e4d44;
+  --accent-light:  #e4f2ee;
+  --text:          #1a2535;
+  --text-muted:    #64748b;
+  --text-faint:    #a8b4c0;
+  --error:         #dc2626;
+  --error-bg:      #fef2f2;
+  --shadow-sm:     0 1px 2px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-md:     0 2px 8px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.05);
+  --shadow-lg:     0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
+  --radius-sm:     6px;
+  --radius-md:     10px;
+  --radius-lg:     14px;
+  --radius-full:   9999px;
+  --t-fast:        0.12s ease;
+  --t-normal:      0.2s ease;
+
+  /* Colour tokens */
+  --color-success: #2d6b5f;
+  --color-danger:  #dc2626;
+  --color-warning: #d97706;
+  --color-info:    #0284c7;
+  --color-muted:   #64748b;
+  --color-faint:   #94a3b8;
+
+  /* Dimension tokens — typography */
+  --text-xs:  10px;
+  --text-sm:  12px;
+  --text-base: 14px;
+  --text-lg:  16px;
+  --text-xl:  20px;
+  --text-2xl: 26px;
+
+  /* Dimension tokens — spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+}
+
+/* ── Base reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { height: 100%; }
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccc4bb; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #b0a89e; }
+
+/* ── Button base ──────────────────────────────────────────────────────────── */
+button {
+  transition: background var(--t-fast), color var(--t-fast),
+              border-color var(--t-fast), transform var(--t-fast),
+              box-shadow var(--t-fast), opacity var(--t-fast);
+  font-family: inherit;
+}
+
+button:not(:disabled):active { transform: scale(0.97); }
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Input / select base ──────────────────────────────────────────────────── */
+input, select, textarea {
+  font-family: inherit;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(45, 107, 95, 0.12);
+}
+
+/* ── Table rows — hover via CSS (no component changes needed) ─────────────── */
+.table-scroll tbody tr {
+  transition: background var(--t-fast);
+}
+
+.table-scroll tbody tr:hover {
+  background: #f7f2eb !important;
+}
+
+.table-scroll table tbody tr:hover {
+  background: #f8f6f3 !important;
+}
+
+/* ── Sticky table headers ────────────────────────────────────────────────── */
+.table-scroll table thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+/* ── Spinner ──────────────────────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* ── Modal entrance animation ────────────────────────────────────────────── */
+@keyframes modalEnter {
+  from { opacity: 0; transform: scale(0.96) translateY(-10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);     }
+}
+
+.modal-card {
+  animation: modalEnter var(--t-normal) ease;
+}
+
+/* ── Page content fade-up ─────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.page-fade {
+  animation: fadeUp 0.25s ease-out;
+}
+
+/* ── Responsive form grid ─────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 680px) { .form-grid { grid-template-columns: 1fr; } }
+
+/* ── Responsive sidebar ───────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .layout-sidebar { width: 56px !important; }
+  .layout-sidebar .sidebar-label { display: none; }
+  .layout-sidebar .brand-text { display: none; }
+}
+
+@media (max-width: 640px) { .layout-sidebar { display: none !important; } }
+
+/* ── Table scroll wrapper ─────────────────────────────────────────────────── */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Mobile hamburger */
+.mobile-hamburger {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text);
+  padding: 4px 8px;
+}
+@media (max-width: 640px) {
+  .mobile-hamburger { display: block; }
+}

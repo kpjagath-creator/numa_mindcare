@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id              Int                 @id @default(autoincrement())
+  patientNumber   String              @unique @map("patient_number")
+  name            String
+  mobile          String
+  email           String
+  age             Int
+  source          String?
+  referredBy      String?             @map("referred_by")
+  currentStatus   String              @default("created") @map("current_status")
+  therapistId     Int?                @map("therapist_id")
+  therapist       TeamMember?         @relation("PatientTherapist", fields: [therapistId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  statusLogs      PatientStatusLog[]
+  assignments     PatientAssignment[]
+  sessions        TherapySession[]
+
+  @@map("patients")
+}
+
+model PatientStatusLog {
+  id               Int      @id @default(autoincrement())
+  patientId        Int      @map("patient_id")
+  previousStatus   String?  @map("previous_status")
+  newStatus        String   @map("new_status")
+  changedByName    String?  @map("changed_by_name")
+  changedByUserId  Int?     @map("changed_by_user_id")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  patient          Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_status_logs")
+}
+
+model TeamMember {
+  id              Int                    @id @default(autoincrement())
+  employeeCode    String                 @unique @map("employee_code")
+  name            String
+  employeeType    String                 @map("employee_type")
+  isActive        Boolean                @default(true) @map("is_active")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  assignments     PatientAssignment[]
+  therapistFor    Patient[]              @relation("PatientTherapist")
+  sessions        TherapySession[]
+  availability    TherapistAvailability[]
+  blockouts       TherapistBlockout[]
+
+  @@map("team_members")
+}
+
+model TherapySession {
+  id                  Int        @id @default(autoincrement())
+  patientId           Int        @map("patient_id")
+  teamMemberId        Int        @map("team_member_id")
+  startTime           DateTime   @map("start_time")
+  endTime             DateTime   @map("end_time")
+  durationMins        Int        @default(60) @map("duration_mins")
+  status              String     @default("upcoming") @map("status")
+  cancelReason        String?    @map("cancel_reason")
+  charges             Decimal?   @map("charges")
+  paymentStatus       String     @default("unpaid") @map("payment_status")
+  noShowFee           Decimal?   @map("no_show_fee")
+  rescheduledFromId   Int?       @map("rescheduled_from_id")
+  rescheduledFrom     TherapySession?  @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  rescheduledTo       TherapySession[] @relation("Reschedule")
+  notes               String?
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+  patient             Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  teamMember          TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  clinicalNotes       ClinicalNote[]
+
+  @@map("therapy_sessions")
+}
+
+model PatientAssignment {
+  id            Int        @id @default(autoincrement())
+  patientId     Int        @map("patient_id")
+  teamMemberId  Int        @map("team_member_id")
+  assignedAt    DateTime   @default(now()) @map("assigned_at")
+  unassignedAt  DateTime?  @map("unassigned_at")
+  isActive      Boolean    @default(true) @map("is_active")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  patient       Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  teamMember    TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@map("patient_assignments")
+}
+
+// F1: Therapist weekly availability slots
+model TherapistAvailability {
+  id            Int        @id @default(autoincrement())
+  teamMemberId  Int        @map("team_member_id")
+  dayOfWeek     Int        @map("day_of_week") // 0=Sunday, 1=Monday ... 6=Saturday
+  startTime     String     @map("start_time")  // "09:00"
+  endTime       String     @map("end_time")    // "18:00"
+  createdAt     DateTime   @default(now()) @map("created_at")
+  teamMember    TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([teamMemberId, dayOfWeek])
+  @@map("therapist_availability")
+}
+
+// F1: Block-out dates (leave, holidays)
+model TherapistBlockout {
+  id            Int        @id @default(autoincrement())
+  teamMemberId  Int        @map("team_member_id")
+  blockDate     DateTime   @map("block_date")
+  reason        String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  teamMember    TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@map("therapist_blockouts")
+}
+
+// F4: Clinical notes (open-form, not SOAP)
+model ClinicalNote {
+  id            Int            @id @default(autoincrement())
+  sessionId     Int            @map("session_id")
+  content       String         // Free-form clinical notes
+  createdByName String         @map("created_by_name")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  session       TherapySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_notes")
+}
+
+model User {
+  id            Int        @id @default(autoincrement())
+  name          String
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  role          String
+  teamMemberId  Int?       @map("team_member_id")
+  isActive      Boolean    @default(true) @map("is_active")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  @@map("users")
+}
