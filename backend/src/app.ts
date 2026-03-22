@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import { logger } from "./middleware/logger";
 import { errorHandler } from "./middleware/errorHandler";
 import v1Router from "./routes/index";
+import prisma from "./lib/prisma";
 
 dotenv.config();
 
@@ -20,6 +21,17 @@ app.use(logger);
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/", (_req: Request, res: Response) => {
   res.json({ success: true, data: { message: "numa-mindcare backend is running" } });
+});
+
+// ── DB connectivity check ──────────────────────────────────────────────────────
+app.get("/api/v1/health/db", async (_req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ success: true, data: { db: "connected" } });
+  } catch (err: any) {
+    console.error("[db-health]", err.message);
+    res.status(500).json({ success: false, error: { message: err.message } });
+  }
 });
 
 // ── API v1 ─────────────────────────────────────────────────────────────────────
