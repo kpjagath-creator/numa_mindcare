@@ -7,16 +7,19 @@ import PatientTable from "../../components/patients/PatientTable";
 import PatientStatusBadge from "../../components/patients/PatientStatusBadge";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import type { Patient, PaginationMeta } from "../../types/index";
 import { PATIENT_STATUSES, STATUS_LABELS } from "../../constants/statuses";
 import { listPatients, deletePatient } from "../../api/patients";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { useToast } from "../../components/ui/Toast";
 
 const LIMIT = 20;
 
 export default function PatientListPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { showToast } = useToast();
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: LIMIT, total: 0 });
@@ -46,9 +49,66 @@ export default function PatientListPage() {
     try {
       await deletePatient(id);
       void fetchPatients();
+      showToast("Patient deleted.", "success");
     } catch {
+      showToast("Failed to delete patient.", "error");
       setError("Failed to delete patient. Please try again.");
     }
+  }
+
+  // ── Mobile patient card with actions ───────────────────────────────────────
+  function MobilePatientCard({ p }: { p: Patient }) {
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    return (
+      <div className="mobile-card">
+        {/* Card info — tap to view profile */}
+        <div
+          style={{ cursor: "pointer" }}
+          onClick={() => navigate(`/patients/${p.id}`)}
+        >
+          <div className="mobile-card-header">
+            <div style={{ flex: 1 }}>
+              <div className="mobile-card-title">{p.name}</div>
+              <div className="mobile-card-subtitle">📞 {p.mobile}</div>
+            </div>
+            <PatientStatusBadge status={p.currentStatus} />
+          </div>
+          <div className="mobile-card-meta">
+            <span>#{p.patientNumber}</span>
+            {p.therapist && <span>👤 {p.therapist.name}</span>}
+            {p.age && <span>🎂 {p.age} yrs</span>}
+            {p.source && <span>📌 {p.source}</span>}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0ece6" }}>
+          <button
+            style={{ flex: 2, padding: "8px 12px", borderRadius: 6, border: "none", background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            onClick={() => navigate(`/patients/${p.id}`)}
+          >
+            👁 View Profile
+          </button>
+          <button
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #fee2e2", background: "#fff5f5", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            🗑 Delete
+          </button>
+        </div>
+
+        {showDeleteConfirm && (
+          <ConfirmDialog
+            title="Delete Patient"
+            message={`Are you sure you want to delete ${p.name}? This cannot be undone.`}
+            confirmLabel="Delete"
+            onConfirm={async () => { await handleDelete(p.id); setShowDeleteConfirm(false); }}
+            onCancel={() => setShowDeleteConfirm(false)}
+          />
+        )}
+      </div>
+    );
   }
 
   const totalPages = Math.ceil(pagination.total / LIMIT);
@@ -104,25 +164,7 @@ export default function PatientListPage() {
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {patients.map((p) => (
-                <div
-                  key={p.id}
-                  className="mobile-card"
-                  onClick={() => navigate(`/patients/${p.id}`)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <div className="mobile-card-header">
-                    <div>
-                      <div className="mobile-card-title">{p.name}</div>
-                      <div className="mobile-card-subtitle">{p.mobile}</div>
-                    </div>
-                    <PatientStatusBadge status={p.currentStatus} />
-                  </div>
-                  <div className="mobile-card-meta">
-                    <span>#{p.patientNumber}</span>
-                    {p.therapist && <span>{p.therapist.name}</span>}
-                    {p.age && <span>{p.age} yrs</span>}
-                  </div>
-                </div>
+                <MobilePatientCard key={p.id} p={p} />
               ))}
             </div>
 
