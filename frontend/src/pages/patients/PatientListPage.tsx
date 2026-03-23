@@ -4,16 +4,19 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "../../components/layout/Layout";
 import PatientTable from "../../components/patients/PatientTable";
+import PatientStatusBadge from "../../components/patients/PatientStatusBadge";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
 import type { Patient, PaginationMeta } from "../../types/index";
 import { PATIENT_STATUSES, STATUS_LABELS } from "../../constants/statuses";
 import { listPatients, deletePatient } from "../../api/patients";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 const LIMIT = 20;
 
 export default function PatientListPage() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: LIMIT, total: 0 });
@@ -50,6 +53,102 @@ export default function PatientListPage() {
 
   const totalPages = Math.ceil(pagination.total / LIMIT);
 
+  // ── Mobile render ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <Layout title="Patients">
+        {/* Mobile search bar */}
+        <input
+          className="mobile-search-bar"
+          placeholder="Search name or mobile…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+        />
+
+        {/* Status filter chips */}
+        <div className="mobile-filter-row">
+          <button
+            className={`mobile-filter-chip${statusFilter === "" ? " active" : ""}`}
+            onClick={() => { setStatusFilter(""); setPage(1); }}
+          >
+            All
+          </button>
+          {PATIENT_STATUSES.map((st) => (
+            <button
+              key={st}
+              className={`mobile-filter-chip${statusFilter === st ? " active" : ""}`}
+              onClick={() => { setStatusFilter(st); setPage(1); }}
+            >
+              {STATUS_LABELS[st]}
+            </button>
+          ))}
+        </div>
+
+        {error && <p style={s.error}>{error}</p>}
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} style={{ height: 80, background: "#e2e8f0", borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite" }} />
+            ))}
+          </div>
+        ) : patients.length === 0 ? (
+          <EmptyState
+            icon="👤"
+            title="No patients yet"
+            subtitle="Register your first patient to get started."
+            actionLabel="Register Patient"
+            onAction={() => navigate("/patients/new")}
+          />
+        ) : (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {patients.map((p) => (
+                <div
+                  key={p.id}
+                  className="mobile-card"
+                  onClick={() => navigate(`/patients/${p.id}`)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className="mobile-card-header">
+                    <div>
+                      <div className="mobile-card-title">{p.name}</div>
+                      <div className="mobile-card-subtitle">{p.mobile}</div>
+                    </div>
+                    <PatientStatusBadge status={p.currentStatus} />
+                  </div>
+                  <div className="mobile-card-meta">
+                    <span>#{p.patientNumber}</span>
+                    {p.therapist && <span>{p.therapist.name}</span>}
+                    {p.age && <span>{p.age} yrs</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div style={s.pager}>
+                <button style={s.pageBtn} disabled={page === 1} onClick={() => setPage((p) => p - 1)}>← Prev</button>
+                <span style={s.muted}>Page {page} of {totalPages}</span>
+                <button style={s.pageBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next →</button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* FAB for new patient */}
+        <button
+          className="fab"
+          onClick={() => navigate("/patients/new")}
+          title="Register new patient"
+        >
+          +
+        </button>
+      </Layout>
+    );
+  }
+
+  // ── Desktop render ─────────────────────────────────────────────────────────
   return (
     <Layout title="Patients">
       {/* ── Toolbar ── */}

@@ -12,12 +12,48 @@ import { listSessions, cancelSession, completeSession, deleteSession, reschedule
 import { listPatients } from "../../api/patients";
 import { listTeamMembers } from "../../api/teamMembers";
 import { useToast } from "../../components/ui/Toast";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 const LIMIT = 50;
 
 type SortKey = "startTime" | "patientName" | "therapistName" | "status" | "paymentStatus";
 
+function fmtDateTime(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function StatusPill({ status }: { status: string }) {
+  const colors: Record<string, { bg: string; color: string }> = {
+    upcoming:    { bg: "#e0f2fe", color: "#0369a1" },
+    completed:   { bg: "#dcfce7", color: "#166534" },
+    cancelled:   { bg: "#fee2e2", color: "#991b1b" },
+    no_show:     { bg: "#fef9c3", color: "#854d0e" },
+    rescheduled: { bg: "#f3e8ff", color: "#6b21a8" },
+  };
+  const c = colors[status] ?? { bg: "#f1f5f9", color: "#64748b" };
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: c.bg, color: c.color }}>
+      {status.replace("_", " ")}
+    </span>
+  );
+}
+
+function PaymentPill({ status }: { status: string }) {
+  const colors: Record<string, { bg: string; color: string }> = {
+    paid:    { bg: "#dcfce7", color: "#166534" },
+    unpaid:  { bg: "#fee2e2", color: "#991b1b" },
+    partial: { bg: "#fef9c3", color: "#854d0e" },
+  };
+  const c = colors[status] ?? { bg: "#f1f5f9", color: "#64748b" };
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: c.bg, color: c.color }}>
+      {status}
+    </span>
+  );
+}
+
 export default function ScheduleListPage() {
+  const isMobile = useIsMobile();
   const [sessions, setSessions] = useState<TherapySession[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: LIMIT, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -32,6 +68,9 @@ export default function ScheduleListPage() {
   const [statusFilter, setStatusFilter] = useState<"" | "upcoming" | "completed" | "cancelled" | "no_show" | "rescheduled">();
   const { showToast } = useToast();
   const [page, setPage] = useState(1);
+
+  // Mobile filter toggle
+  const [showFilters, setShowFilters] = useState(false);
 
   // Sorting
   const [sortKey, setSortKey] = useState<SortKey>("startTime");
@@ -121,6 +160,146 @@ export default function ScheduleListPage() {
     return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
   });
 
+  // ── Mobile render ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <Layout title="Schedule">
+        {/* Mobile toolbar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span style={{ fontSize: 12, color: "#8a96a3" }}>
+            {!loading && `${pagination.total} session${pagination.total !== 1 ? "s" : ""}`}
+          </span>
+          <button
+            style={{ padding: "6px 12px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#64748b" }}
+            onClick={() => setShowFilters((v) => !v)}
+          >
+            {showFilters ? "Hide filters" : "Filters"}{hasFilters ? " •" : ""}
+          </button>
+        </div>
+
+        {/* Collapsible filter section */}
+        {showFilters && (
+          <div style={{ background: "#fff", borderRadius: 10, padding: 12, marginBottom: 12, border: "1px solid #ede7df" }}>
+            {/* Status chips */}
+            <div className="mobile-filter-row">
+              {(["", "upcoming", "completed", "cancelled", "no_show", "rescheduled"] as const).map((st) => (
+                <button
+                  key={st || "all"}
+                  className={`mobile-filter-chip${(statusFilter ?? "") === st ? " active" : ""}`}
+                  onClick={() => { setStatusFilter((st || undefined) as any); setPage(1); }}
+                >
+                  {st === "" ? "All" : st.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+            <select
+              style={{ width: "100%", padding: "8px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, marginBottom: 8, background: "#fff" }}
+              value={patientFilter}
+              onChange={(e) => { setPatientFilter(e.target.value); setPage(1); }}
+            >
+              <option value="">All patients</option>
+              {patients.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            <select
+              style={{ width: "100%", padding: "8px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, marginBottom: 8, background: "#fff" }}
+              value={therapistFilter}
+              onChange={(e) => { setTherapistFilter(e.target.value); setPage(1); }}
+            >
+              <option value="">All therapists</option>
+              {therapists.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <input
+              type="date"
+              style={{ width: "100%", padding: "8px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, background: "#fff" }}
+              value={dateFilter}
+              onChange={(e) => { setDateFilter(e.target.value); setPage(1); }}
+            />
+            {hasFilters && (
+              <button
+                style={{ marginTop: 8, padding: "6px 12px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#8a96a3", width: "100%" }}
+                onClick={resetFilters}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {error && <p style={s.errorMsg}>{error}</p>}
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} style={{ height: 90, background: "#e2e8f0", borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite" }} />
+            ))}
+          </div>
+        ) : sessions.length === 0 ? (
+          <EmptyState
+            icon="📅"
+            title="No sessions found"
+            subtitle={hasFilters ? "Try adjusting your filters." : "Schedule your first therapy session."}
+            actionLabel={hasFilters ? undefined : "+ Add Schedule"}
+            onAction={hasFilters ? undefined : () => setShowModal(true)}
+          />
+        ) : (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {sortedSessions.map((sess) => (
+                <div key={sess.id} className="mobile-card">
+                  <div className="mobile-card-header">
+                    <div>
+                      <div className="mobile-card-title">{sess.patient.name}</div>
+                      <div className="mobile-card-subtitle">{sess.therapist.name}</div>
+                    </div>
+                    <StatusPill status={sess.status} />
+                  </div>
+                  <div className="mobile-card-meta">
+                    <span>{fmtDateTime(sess.startTime)}</span>
+                    <PaymentPill status={sess.paymentStatus} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div style={s.pager}>
+                <button style={s.pageBtn} disabled={page === 1} onClick={() => setPage((p) => p - 1)}>← Prev</button>
+                <span style={s.muted}>Page {page} of {totalPages}</span>
+                <button style={s.pageBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next →</button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* FAB */}
+        <button
+          className="fab"
+          onClick={() => setShowModal(true)}
+          title="Add new session"
+        >
+          +
+        </button>
+
+        {showModal && (
+          <AddSessionModal
+            onClose={() => setShowModal(false)}
+            onCreated={() => { setShowModal(false); void fetchSessions(); }}
+          />
+        )}
+
+        {notesSession && (
+          <ClinicalNotesPanel
+            sessionId={notesSession.id}
+            patientName={notesSession.patient.name}
+            sessionDate={notesSession.startTime}
+            onClose={() => setNotesSession(null)}
+          />
+        )}
+      </Layout>
+    );
+  }
+
+  // ── Desktop render ─────────────────────────────────────────────────────────
   return (
     <Layout title="Schedule">
       {/* ── Toolbar ── */}

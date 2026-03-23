@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Layout from "../../components/layout/Layout";
 import { getRevenueStats, RevenueStats, MiniSession } from "../../api/analytics";
 import { completeSession } from "../../api/therapySessions";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,86 @@ function AddChargeRow({
   );
 }
 
+// Mobile outstanding session card with inline charge input
+function AddChargeCard({
+  session,
+  onSaved,
+}: {
+  session: MiniSession;
+  onSaved: (id: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleSave() {
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || parsed <= 0) { setErr("Enter a valid amount"); return; }
+    setSaving(true);
+    setErr(null);
+    try {
+      await completeSession(session.id, parsed);
+      onSaved(session.id);
+    } catch (e: any) {
+      setErr(e.response?.data?.error?.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mobile-card">
+      <div className="mobile-card-header">
+        <div>
+          <div className="mobile-card-title">{session.patientName}</div>
+          <div className="mobile-card-subtitle">{session.therapistName}</div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 12, color: "#64748b" }}>{fmtDate(session.startTime)}</div>
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmtDuration(session.durationMins)}</div>
+        </div>
+      </div>
+      {editing ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <span style={{ fontSize: 13, color: "#64748b" }}>₹</span>
+          <input
+            autoFocus
+            type="number"
+            min={1}
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            style={{ flex: 1, padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 14, outline: "none" }}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
+            placeholder="Amount"
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{ padding: "6px 14px", background: "#2d6b5f", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+          >
+            {saving ? "..." : "Save"}
+          </button>
+          <button
+            onClick={() => { setEditing(false); setErr(null); }}
+            style={{ padding: "6px 10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer" }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+        >
+          + Add Charge
+        </button>
+      )}
+      {err && <div style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>{err}</div>}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
@@ -178,6 +259,7 @@ export default function BillingPage() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [outstanding, setOutstanding] = useState<MiniSession[]>([]);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     getRevenueStats()
@@ -211,6 +293,86 @@ export default function BillingPage() {
     );
   }
 
+  // ── Mobile render ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <Layout title="Billing">
+        {/* Revenue stats as horizontally scrollable cards */}
+        <div className="stats-scroll" style={{ marginBottom: 14 }}>
+          <div className="stat-chip">
+            <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Total Revenue</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1a2535" }}>{fmtRupees(stats.totalRevenue)}</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>all completed sessions</div>
+          </div>
+          <div className="stat-chip">
+            <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Avg / Session</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#1a2535" }}>
+              {stats.averageChargePerSession > 0 ? fmtRupees(stats.averageChargePerSession) : "—"}
+            </div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{stats.totalCompletedSessions} sessions</div>
+          </div>
+          <div className="stat-chip">
+            <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Outstanding</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: outstanding.length > 0 ? "#c2410c" : "#1a2535" }}>{outstanding.length}</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>missing charges</div>
+          </div>
+        </div>
+
+        {/* Monthly chart in scrollable container */}
+        <div style={{ ...sectionCard, marginBottom: 12 }}>
+          <div style={sectionTitle}>Monthly Revenue (Last 6 Months)</div>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <div style={{ minWidth: 320 }}>
+              <BarChart data={stats.monthlyRevenue} />
+            </div>
+          </div>
+        </div>
+
+        {/* Revenue by therapist — mobile cards */}
+        {stats.revenueByTherapist.length > 0 && (
+          <div style={{ ...sectionCard, marginBottom: 12 }}>
+            <div style={sectionTitle}>Revenue by Therapist</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+              {stats.revenueByTherapist.map((t) => (
+                <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2535" }}>{t.name}</div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>{t.sessionCount} sessions</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2d6b5f" }}>{fmtRupees(t.revenue)}</div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                      avg {t.sessionCount > 0 ? fmtRupees(Math.round(t.revenue / t.sessionCount)) : "—"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Outstanding sessions — mobile cards */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+            Outstanding Sessions ({outstanding.length})
+          </div>
+          {outstanding.length === 0 ? (
+            <div style={{ background: "#fff", borderRadius: 10, padding: "16px 18px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)", color: "#94a3b8", fontSize: 12 }}>
+              All completed sessions have charges recorded.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {outstanding.map((s) => (
+                <AddChargeCard key={s.id} session={s} onSaved={handleChargeSaved} />
+              ))}
+            </div>
+          )}
+        </div>
+      </Layout>
+    );
+  }
+
+  // ── Desktop render ─────────────────────────────────────────────────────────
   return (
     <Layout title="Billing">
       {/* ── Summary cards ─────────────────────────────────────────────── */}

@@ -19,6 +19,7 @@ import SessionsTable from "../../components/schedule/SessionsTable";
 import ClinicalNotesPanel from "../../components/schedule/ClinicalNotesPanel";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/Toast";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import type { PaymentStatus } from "../../types/index";
 
 function getAdminName(): string {
@@ -97,6 +98,7 @@ export default function PatientProfilePage() {
   const navigate = useNavigate();
   const patientId = parseInt(id ?? "", 10);
   const { showToast } = useToast();
+  const isMobile = useIsMobile();
 
   const [patient, setPatient] = useState<Patient | null>(null);
   const [logs, setLogs] = useState<PatientStatusLog[]>([]);
@@ -284,6 +286,226 @@ export default function PatientProfilePage() {
     return <Layout title="Patient Profile"><p style={{ color: "#718096" }}><Spinner /></p></Layout>;
   }
 
+  // ── Mobile render ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <Layout title={`${patient.patientNumber}`}>
+        {/* Mobile breadcrumb row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <button style={s.backBtn} onClick={() => navigate("/patients")}>← Patients</button>
+          <button style={s.dangerBtn} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+        </div>
+
+        {/* Patient info card — always visible on mobile */}
+        <div style={{ ...s.card, marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2535" }}>{patient.name}</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>#{patient.patientNumber}</div>
+            </div>
+            <PatientStatusBadge status={patient.currentStatus} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <InfoRow label="Mobile" value={patient.mobile} />
+            <InfoRow label="Age" value={`${patient.age} yrs`} />
+            <InfoRow label="Email" value={patient.email} />
+            <InfoRow label="Source" value={patient.source} />
+            <InfoRow label="Referred By" value={patient.referredBy} />
+            <InfoRow label="Therapist" value={patient.therapist ? patient.therapist.name : null} />
+            <InfoRow label="Registered" value={formatDate(patient.createdAt)} />
+          </div>
+
+          {!editingInfo ? (
+            <button
+              style={{ ...s.editBtn, marginTop: 12, width: "100%" }}
+              onClick={() => setEditingInfo(true)}
+            >
+              Edit Info
+            </button>
+          ) : (
+            <form onSubmit={handleSaveAll} style={{ marginTop: 12 }}>
+              {infoError && <p style={s.apiError}>{infoError}</p>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  { field: "name", label: "Full Name" },
+                  { field: "mobile", label: "Mobile" },
+                  { field: "email", label: "Email" },
+                  { field: "age", label: "Age" },
+                  { field: "referred_by", label: "Referred By" },
+                ].map(({ field, label }) => (
+                  <div key={field} style={s.fieldCol}>
+                    <label style={s.label}>{label}</label>
+                    <input
+                      style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
+                      value={(infoValues as Record<string, string>)[field]}
+                      onChange={(e) => setInfoValues((v) => ({ ...v, [field]: e.target.value }))}
+                    />
+                  </div>
+                ))}
+                <div style={s.fieldCol}>
+                  <label style={s.label}>Source</label>
+                  <select style={{ ...s.select, width: "100%", boxSizing: "border-box" }} value={infoValues.source} onChange={(e) => setInfoValues((v) => ({ ...v, source: e.target.value }))}>
+                    <option value="">—</option>
+                    <option value="Patient referral">Patient referral</option>
+                    <option value="Doctor referral">Doctor referral</option>
+                    <option value="Other referral">Other referral</option>
+                    <option value="Events">Events</option>
+                  </select>
+                </div>
+                <div style={s.fieldCol}>
+                  <label style={s.label}>Therapist</label>
+                  <select style={{ ...s.select, width: "100%", boxSizing: "border-box" }} value={selectedTherapistId} onChange={(e) => setSelectedTherapistId(e.target.value)}>
+                    <option value="">No therapist assigned</option>
+                    {therapists.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <button type="submit" style={{ ...s.updateBtn, flex: 2 }} disabled={savingInfo}>
+                  {savingInfo ? "Saving…" : "Save Changes"}
+                </button>
+                <button type="button" style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => { setEditingInfo(false); setInfoError(null); }}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        {/* Status action buttons */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => setShowCurrentStatus(true)}>
+            Change Status
+          </button>
+          <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => setShowStatusHistory(true)}>
+            View History
+          </button>
+        </div>
+
+        {/* Clinical notes summary */}
+        {allPatientNotes.length > 0 && (
+          <div style={{ ...s.card, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+              Clinical Notes ({allPatientNotes.length})
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {allPatientNotes.slice(0, 3).map((note) => (
+                <div key={note.id} style={{ fontSize: 12, color: "#334155", background: "#fdfbf9", padding: "8px 10px", borderRadius: 6, borderLeft: "2px solid #2d6b5f" }}>
+                  <p style={{ margin: 0, marginBottom: 4 }}>{note.content.length > 100 ? note.content.substring(0, 100) + "..." : note.content}</p>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>
+                    {note.createdByName} · {new Date(note.createdAt).toLocaleDateString("en-IN")}
+                  </div>
+                </div>
+              ))}
+              {allPatientNotes.length > 3 && (
+                <div style={{ fontSize: 11, color: "#2d6b5f", fontWeight: 600 }}>+{allPatientNotes.length - 3} more notes</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Therapy Sessions — collapsible */}
+        {sessions.length > 0 && (
+          <CollapsibleCard title={`Therapy Sessions (${sessions.length})`} storageKey="sessions" defaultOpen={false}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <SessionsTable
+                sessions={sessions}
+                showPatient={false}
+                onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshSessions(); showToast("Session cancelled.", "success"); }}
+                onComplete={async (id, charges) => { await completeSession(id, charges); await refreshSessions(); showToast("Session completed.", "success"); }}
+                onDelete={async (id) => { await deleteSession(id); await refreshSessions(); showToast("Session deleted.", "success"); }}
+                onReschedule={handleSessionReschedule}
+                onNoShow={handleSessionNoShow}
+                onPaymentStatusChange={handleSessionPaymentStatus}
+                onNotes={(session) => setNotesSession(session)}
+              />
+            </div>
+          </CollapsibleCard>
+        )}
+
+        {/* Change Status Modal */}
+        {showCurrentStatus && (
+          <>
+            <div onClick={() => setShowCurrentStatus(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 200 }} />
+            <div style={{
+              position: "fixed", bottom: 0, left: 0, right: 0,
+              background: "#fff", borderRadius: "16px 16px 0 0", zIndex: 201,
+              padding: "24px 20px", boxShadow: "0 -8px 32px rgba(0,0,0,0.18)",
+              maxHeight: "90vh", overflowY: "auto",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1a2535" }}>Update Status</h2>
+                <button onClick={() => setShowCurrentStatus(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>✕</button>
+              </div>
+              <form onSubmit={handleStatusUpdate}>
+                {updateError && <p style={s.apiError}>{updateError}</p>}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+                  <div style={s.fieldCol}>
+                    <label style={s.label}>New Status *</label>
+                    <select style={{ ...s.select, width: "100%", boxSizing: "border-box" }} value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                      {PATIENT_STATUSES.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+                    </select>
+                    {statusFieldError && <span style={s.fieldErr}>{statusFieldError}</span>}
+                  </div>
+                  <div style={s.fieldCol}>
+                    <label style={s.label}>Changed By *</label>
+                    <input
+                      style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
+                      value={changedByName || adminName}
+                      onChange={(e) => setChangedByName(e.target.value)}
+                      placeholder={adminName}
+                    />
+                    {nameFieldError && <span style={s.fieldErr}>{nameFieldError}</span>}
+                  </div>
+                  <div style={s.fieldCol}>
+                    <label style={s.label}>Notes / Reason</label>
+                    <textarea
+                      style={{ ...s.input, width: "100%", boxSizing: "border-box", minHeight: 80, resize: "vertical" }}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add context…"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button type="submit" style={{ ...s.updateBtn, flex: 2 }} disabled={updating}>
+                    {updating ? "Updating…" : "Update Status"}
+                  </button>
+                  <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, flex: 1 }}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </>
+        )}
+
+        <StatusHistoryModal open={showStatusHistory} logs={logs} onClose={() => setShowStatusHistory(false)} />
+
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          title="Delete Patient"
+          message={`Permanently delete ${patient?.name}? All sessions and history will be removed. This cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+          loading={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+
+        {notesSession && (
+          <ClinicalNotesPanel
+            sessionId={notesSession.id}
+            patientName={notesSession.patient.name}
+            sessionDate={notesSession.startTime}
+            onClose={() => setNotesSession(null)}
+          />
+        )}
+      </Layout>
+    );
+  }
+
+  // ── Desktop render ─────────────────────────────────────────────────────────
   return (
     <Layout title={`Patient ${patient.patientNumber}`}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>

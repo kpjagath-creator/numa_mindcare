@@ -2,10 +2,9 @@
 
 interface Props { title?: string; onMenuClick?: () => void; }
 
-export default function TopBar({ title, onMenuClick }: Props) {
+export default function TopBar({ title }: Props) {
   return (
     <header style={s.bar}>
-      <button className="mobile-hamburger" style={{ display: "none" }} onClick={onMenuClick}>☰</button>
       <span style={s.title}>{title ?? "Numa Mindcare"}</span>
     </header>
   );

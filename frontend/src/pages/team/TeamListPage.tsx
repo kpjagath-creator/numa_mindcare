@@ -8,9 +8,11 @@ import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
 import type { TeamMember } from "../../types/index";
 import { listTeamMembers, deleteTeamMember } from "../../api/teamMembers";
+import { useIsMobile } from "../../hooks/useIsMobile";
 
 export default function TeamListPage() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +40,74 @@ export default function TeamListPage() {
     }
   }
 
+  // ── Mobile render ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <Layout title="Team">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <span style={s.count}>{loading ? "" : `${members.length} member${members.length !== 1 ? "s" : ""}`}</span>
+        </div>
+
+        {error && <p style={s.error}>{error}</p>}
+
+        {loading ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} style={{ height: 72, background: "#e2e8f0", borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite" }} />
+            ))}
+          </div>
+        ) : members.length === 0 ? (
+          <EmptyState
+            icon="🧑‍⚕️"
+            title="No team members yet"
+            subtitle="Add your first therapist or psychiatrist."
+            actionLabel="Add Team Member"
+            onAction={() => navigate("/team/new")}
+          />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {members.map((m) => (
+              <div
+                key={m.id}
+                className="mobile-card"
+                onClick={() => navigate(`/team/${m.id}/patients`)}
+                style={{ cursor: "pointer" }}
+              >
+                <div className="mobile-card-header">
+                  <div>
+                    <div className="mobile-card-title">{m.name}</div>
+                    <div className="mobile-card-subtitle">{m.employeeCode}</div>
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                    background: m.employeeType === "psychologist" ? "#e0f2fe" : "#f3e8ff",
+                    color: m.employeeType === "psychologist" ? "#0369a1" : "#6b21a8",
+                  }}>
+                    {m.employeeType}
+                  </span>
+                </div>
+                <div className="mobile-card-meta">
+                  <span>{m.isActive ? "Active" : "Inactive"}</span>
+                  <span style={{ color: "#2d6b5f", fontWeight: 600 }}>View patients →</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* FAB for adding team member */}
+        <button
+          className="fab"
+          onClick={() => navigate("/team/new")}
+          title="Add team member"
+        >
+          +
+        </button>
+      </Layout>
+    );
+  }
+
+  // ── Desktop render ─────────────────────────────────────────────────────────
   return (
     <Layout title="Team">
       <div style={s.toolbar}>
