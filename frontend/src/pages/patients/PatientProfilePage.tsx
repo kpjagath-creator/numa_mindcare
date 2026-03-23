@@ -30,6 +30,17 @@ function getAdminName(): string {
   return "Admin";
 }
 
+function avatarColor(name: string): string {
+  const colors = ["#6366F1","#1A7A6E","#F59E0B","#EF4444","#8B5CF6","#EC4899","#10B981","#0EA5E9"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function initialsOf(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
 function setAdminName(name: string) {
   try { localStorage.setItem("admin_name", name); } catch {}
 }
@@ -298,13 +309,26 @@ export default function PatientProfilePage() {
 
         {/* Patient info card — always visible on mobile */}
         <div style={{ ...s.card, marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: "#1a2535" }}>{patient.name}</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 3 }}>#{patient.patientNumber}</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 14, marginBottom: 14 }}>
+            {/* Large avatar circle */}
+            <div style={{
+              width: 52, height: 52, borderRadius: "50%",
+              background: avatarColor(patient.name) + "22",
+              color: avatarColor(patient.name),
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 18, fontWeight: 800, flexShrink: 0,
+            }}>
+              {initialsOf(patient.name)}
             </div>
-            <PatientStatusBadge status={patient.currentStatus} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>{patient.name}</div>
+              <div style={{ fontSize: 13, color: "#64748B", marginTop: 3 }}>#{patient.patientNumber}</div>
+              <div style={{ marginTop: 6 }}>
+                <PatientStatusBadge status={patient.currentStatus} />
+              </div>
+            </div>
           </div>
+          <div className="section-label" style={{ marginTop: 0, marginBottom: 8 }}>Patient Details</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <InfoRow label="Mobile" value={patient.mobile} />
             <InfoRow label="Age" value={`${patient.age} yrs`} />
@@ -374,10 +398,16 @@ export default function PatientProfilePage() {
 
         {/* Status action buttons */}
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => setShowCurrentStatus(true)}>
+          <button
+            style={{ flex: 1, padding: "10px 16px", borderRadius: 10, border: "none", background: "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            onClick={() => setShowCurrentStatus(true)}
+          >
             Change Status
           </button>
-          <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => setShowStatusHistory(true)}>
+          <button
+            style={{ flex: 1, padding: "10px 16px", borderRadius: 10, border: "2px solid #1A7A6E", background: "#fff", color: "#1A7A6E", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            onClick={() => setShowStatusHistory(true)}
+          >
             View History
           </button>
         </div>
@@ -385,7 +415,7 @@ export default function PatientProfilePage() {
         {/* Clinical notes summary */}
         {allPatientNotes.length > 0 && (
           <div style={{ ...s.card, marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            <div className="section-label" style={{ marginTop: 0, marginBottom: 8 }}>
               Clinical Notes ({allPatientNotes.length})
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

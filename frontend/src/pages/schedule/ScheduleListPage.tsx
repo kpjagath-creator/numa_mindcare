@@ -20,7 +20,11 @@ const LIMIT = 50;
 type SortKey = "startTime" | "patientName" | "therapistName" | "status" | "paymentStatus";
 
 function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const d = new Date(iso);
+  const weekday = d.toLocaleDateString("en-IN", { weekday: "short" });
+  const day = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  return `${weekday}, ${day} · ${time}`;
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -190,7 +194,7 @@ export default function ScheduleListPage() {
     });
 
     return (
-      <div className="mobile-card">
+      <div className={`mobile-card card-status-${sess.status}`}>
         {/* Card header */}
         <div className="mobile-card-header">
           <div style={{ flex: 1 }}>
@@ -202,30 +206,37 @@ export default function ScheduleListPage() {
 
         {/* Meta row */}
         <div className="mobile-card-meta">
-          <span>🗓 {fmtDateTime(sess.startTime)}</span>
-          <span>⏱ {sess.durationMins} min</span>
+          <span>{fmtDateTime(sess.startTime)}</span>
+          <span>{sess.durationMins} min</span>
+        </div>
+
+        {/* Payment row with icon */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
           <PaymentPill status={sess.paymentStatus} />
         </div>
 
         {sess.notes && (
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 6, fontStyle: "italic", background: "#f8f6f3", borderRadius: 6, padding: "6px 10px" }}>
-            📋 {sess.notes}
+          <div style={{ fontSize: 13, color: "#64748B", marginTop: 6, fontStyle: "italic", background: "#F8FAFC", borderRadius: 8, padding: "6px 10px" }}>
+            {sess.notes}
           </div>
         )}
 
         {/* Action toggle row */}
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button
-            style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "1px solid #ddd5cb", background: "#f8f6f3", fontSize: 12, color: "#64748b", cursor: "pointer", fontWeight: 500 }}
+            style={{ flex: 1, padding: "7px 10px", borderRadius: 9999, border: "1px solid #E2E8F0", background: "#F8FAFC", fontSize: 12, color: "#64748B", cursor: "pointer", fontWeight: 500 }}
             onClick={() => setExpanded((v) => !v)}
           >
-            {expanded ? "Hide actions ▲" : "Actions ▼"}
+            {expanded ? "Hide ▲" : "Actions ▼"}
           </button>
           <button
-            style={{ flex: 1, padding: "7px 10px", borderRadius: 6, border: "1px solid #2d6b5f", background: "#e4f2ee", fontSize: 12, color: "#2d6b5f", cursor: "pointer", fontWeight: 600 }}
+            style={{ flex: 1, padding: "7px 10px", borderRadius: 9999, border: "1px solid #1A7A6E", background: "#E8F5F3", fontSize: 12, color: "#1A7A6E", cursor: "pointer", fontWeight: 600 }}
             onClick={() => setNotesSession(sess)}
           >
-            📝 Notes
+            Notes
           </button>
         </div>
 
@@ -377,15 +388,14 @@ export default function ScheduleListPage() {
         )}
 
         {/* Delete confirm dialog */}
-        {showDeleteConfirm && (
-          <ConfirmDialog
-            title="Delete Session"
-            message="Are you sure you want to delete this session? This cannot be undone."
-            confirmLabel="Delete"
-            onConfirm={async () => { await handleDelete(sess.id); setShowDeleteConfirm(false); }}
-            onCancel={() => setShowDeleteConfirm(false)}
-          />
-        )}
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          title="Delete Session"
+          message="Are you sure you want to delete this session? This cannot be undone."
+          confirmLabel="Delete"
+          onConfirm={async () => { await handleDelete(sess.id); setShowDeleteConfirm(false); }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
       </div>
     );
   }

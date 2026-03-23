@@ -1,20 +1,33 @@
 // Top bar — page title with subtle shadow.
 
+import React from "react";
+
 interface Props { title?: string; onMenuClick?: () => void; }
 
+function getTodayLabel(): string {
+  return new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+}
+
 export default function TopBar({ title }: Props) {
+  const isDashboard = !title || title === "Dashboard";
   return (
     <header style={s.bar}>
-      <span style={s.title}>{title ?? "Numa Mindcare"}</span>
+      <div>
+        <span style={s.title}>{title ?? "Numa Mindcare"}</span>
+        {isDashboard && (
+          <div style={s.subtitle}>Today, {getTodayLabel()}</div>
+        )}
+      </div>
     </header>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
   bar: {
-    height: 50,
+    height: 52,
     background: "#ffffff",
-    boxShadow: "0 1px 0 rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.03)",
+    borderBottom: "1px solid #E2E8F0",
+    boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
     display: "flex",
     alignItems: "center",
     padding: "0 24px",
@@ -24,9 +37,16 @@ const s: Record<string, React.CSSProperties> = {
     position: "relative",
   },
   title: {
-    fontWeight: 600,
-    fontSize: 13,
-    color: "#1a2535",
-    letterSpacing: "0.01em",
+    fontWeight: 700,
+    fontSize: 17,
+    color: "#0F172A",
+    letterSpacing: "-0.01em",
+    display: "block",
+  },
+  subtitle: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontWeight: 500,
+    marginTop: 1,
   },
 };

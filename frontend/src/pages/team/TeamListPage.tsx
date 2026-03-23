@@ -12,6 +12,17 @@ import { listTeamMembers, deleteTeamMember } from "../../api/teamMembers";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../components/ui/Toast";
 
+// ── Role avatar color ──────────────────────────────────────────────────────
+function roleAvatarColor(employeeType: string): { bg: string; color: string } {
+  if (employeeType === "psychologist") return { bg: "#E8F5F3", color: "#1A7A6E" };
+  if (employeeType === "psychiatrist") return { bg: "#EEF2FF", color: "#6366F1" };
+  return { bg: "#F1F5F9", color: "#64748B" };
+}
+
+function initials(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
 export default function TeamListPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -48,47 +59,64 @@ export default function TeamListPage() {
   // ── Mobile team card with actions ──────────────────────────────────────────
   function MobileTeamCard({ m }: { m: TeamMember }) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const avatarStyle = roleAvatarColor(m.employeeType);
     return (
       <div className="mobile-card">
-        <div className="mobile-card-header" style={{ cursor: "pointer" }} onClick={() => navigate(`/team/${m.id}/patients`)}>
-          <div style={{ flex: 1 }}>
-            <div className="mobile-card-title">{m.name}</div>
-            <div className="mobile-card-subtitle">{m.employeeCode}</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }} onClick={() => navigate(`/team/${m.id}/patients`)}>
+          {/* Avatar circle */}
+          <div
+            className="avatar-circle"
+            style={{ background: avatarStyle.bg, color: avatarStyle.color, fontSize: 14, fontWeight: 700 }}
+          >
+            {initials(m.name)}
           </div>
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
-            background: m.employeeType === "psychologist" ? "#e0f2fe" : "#f3e8ff",
-            color: m.employeeType === "psychologist" ? "#0369a1" : "#6b21a8",
-          }}>
-            {m.employeeType}
-          </span>
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+              <div className="mobile-card-title" style={{ flex: 1, marginRight: 8 }}>{m.name}</div>
+              <span style={{
+                fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 9999,
+                background: m.employeeType === "psychologist" ? "#E8F5F3" : "#EEF2FF",
+                color: m.employeeType === "psychologist" ? "#1A7A6E" : "#6366F1",
+              }}>
+                {m.employeeType}
+              </span>
+            </div>
+            <div className="mobile-card-subtitle">{m.employeeCode}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: "50%",
+                background: m.isActive ? "#10B981" : "#94A3B8",
+                flexShrink: 0,
+              }} />
+              <span style={{ fontSize: 12, color: m.isActive ? "#10B981" : "#94A3B8", fontWeight: 600 }}>
+                {m.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="mobile-card-meta">
-          <span>{m.isActive ? "✅ Active" : "❌ Inactive"}</span>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0ece6" }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #EEF2F7" }}>
           <button
-            style={{ flex: 2, padding: "8px 12px", borderRadius: 6, border: "none", background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 2, padding: "8px 12px", borderRadius: 8, border: "none", background: "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => navigate(`/team/${m.id}/patients`)}
           >
-            👥 View Patients
+            View Patients
           </button>
           <button
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #fee2e2", background: "#fff5f5", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#FEF2F2", color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowDeleteConfirm(true)}
           >
-            🗑 Delete
+            Delete
           </button>
         </div>
-        {showDeleteConfirm && (
-          <ConfirmDialog
-            title="Delete Team Member"
-            message={`Are you sure you want to delete ${m.name}? This cannot be undone.`}
-            confirmLabel="Delete"
-            onConfirm={async () => { await handleDelete(m.id); setShowDeleteConfirm(false); }}
-            onCancel={() => setShowDeleteConfirm(false)}
-          />
-        )}
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          title="Delete Team Member"
+          message={`Are you sure you want to delete ${m.name}? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={async () => { await handleDelete(m.id); setShowDeleteConfirm(false); }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
       </div>
     );
   }

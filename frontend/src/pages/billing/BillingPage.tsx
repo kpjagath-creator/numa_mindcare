@@ -295,8 +295,17 @@ export default function BillingPage() {
 
   // ── Mobile render ──────────────────────────────────────────────────────────
   if (isMobile) {
+    const totalRevByTherapist = stats.revenueByTherapist.reduce((acc, t) => acc + t.revenue, 0);
     return (
       <Layout title="Billing">
+        {/* Alert banner for outstanding sessions */}
+        {outstanding.length > 0 && (
+          <div className="alert-banner alert-banner-warning">
+            <span>⚠️</span>
+            <span>{outstanding.length} session{outstanding.length !== 1 ? "s" : ""} need charges added</span>
+          </div>
+        )}
+
         {/* Revenue stats as 3-column grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
@@ -328,25 +337,39 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Revenue by therapist — mobile cards */}
+        {/* Revenue by therapist — mobile cards with mini percentage bar */}
         {stats.revenueByTherapist.length > 0 && (
           <div style={{ ...sectionCard, marginBottom: 12 }}>
             <div style={sectionTitle}>Revenue by Therapist</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-              {stats.revenueByTherapist.map((t) => (
-                <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2535" }}>{t.name}</div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>{t.sessionCount} sessions</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#2d6b5f" }}>{fmtRupees(t.revenue)}</div>
-                    <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                      avg {t.sessionCount > 0 ? fmtRupees(Math.round(t.revenue / t.sessionCount)) : "—"}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+              {stats.revenueByTherapist.map((t) => {
+                const pct = totalRevByTherapist > 0 ? Math.round((t.revenue / totalRevByTherapist) * 100) : 0;
+                return (
+                  <div key={t.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{t.name}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.sessionCount} sessions · {pct}%</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1A7A6E" }}>{fmtRupees(t.revenue)}</div>
+                        <div style={{ fontSize: 11, color: "#94A3B8" }}>
+                          avg {t.sessionCount > 0 ? fmtRupees(Math.round(t.revenue / t.sessionCount)) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Mini percentage bar */}
+                    <div style={{ background: "#E2E8F0", borderRadius: 4, height: 5 }}>
+                      <div style={{
+                        background: "linear-gradient(90deg, #1A7A6E, #34D399)",
+                        borderRadius: 4, height: 5,
+                        width: `${pct}%`,
+                        transition: "width 0.5s ease",
+                      }} />
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

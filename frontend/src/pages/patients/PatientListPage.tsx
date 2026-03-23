@@ -16,6 +16,17 @@ import { useToast } from "../../components/ui/Toast";
 
 const LIMIT = 20;
 
+// ── Avatar helpers ─────────────────────────────────────────────────────────
+function avatarColor(name: string): string {
+  const colors = ["#6366F1","#1A7A6E","#F59E0B","#EF4444","#8B5CF6","#EC4899","#10B981","#0EA5E9"];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+function initials(name: string): string {
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
 export default function PatientListPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -59,54 +70,62 @@ export default function PatientListPage() {
   // ── Mobile patient card with actions ───────────────────────────────────────
   function MobilePatientCard({ p }: { p: Patient }) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const color = avatarColor(p.name);
 
     return (
       <div className="mobile-card">
         {/* Card info — tap to view profile */}
         <div
-          style={{ cursor: "pointer" }}
+          style={{ cursor: "pointer", display: "flex", gap: 12, alignItems: "flex-start" }}
           onClick={() => navigate(`/patients/${p.id}`)}
         >
-          <div className="mobile-card-header">
-            <div style={{ flex: 1 }}>
-              <div className="mobile-card-title">{p.name}</div>
-              <div className="mobile-card-subtitle">📞 {p.mobile}</div>
-            </div>
-            <PatientStatusBadge status={p.currentStatus} />
+          {/* Avatar circle */}
+          <div
+            className="avatar-circle"
+            style={{ background: color + "22", color, fontSize: 14, fontWeight: 700 }}
+          >
+            {initials(p.name)}
           </div>
-          <div className="mobile-card-meta">
-            <span>#{p.patientNumber}</span>
-            {p.therapist && <span>👤 {p.therapist.name}</span>}
-            {p.age && <span>🎂 {p.age} yrs</span>}
-            {p.source && <span>📌 {p.source}</span>}
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+              <div className="mobile-card-title" style={{ flex: 1, marginRight: 8 }}>{p.name}</div>
+              <PatientStatusBadge status={p.currentStatus} />
+            </div>
+            <div className="mobile-card-subtitle">{p.mobile}</div>
+            <div className="mobile-card-meta">
+              <span>#{p.patientNumber}</span>
+              {p.therapist && <span>{p.therapist.name}</span>}
+              {p.age && <span>{p.age} yrs</span>}
+              {p.source && <span>{p.source}</span>}
+            </div>
           </div>
         </div>
 
         {/* Action buttons */}
-        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0ece6" }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #EEF2F7" }}>
           <button
-            style={{ flex: 2, padding: "8px 12px", borderRadius: 6, border: "none", background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 2, padding: "8px 12px", borderRadius: 8, border: "none", background: "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => navigate(`/patients/${p.id}`)}
           >
-            👁 View Profile
+            View Profile
           </button>
           <button
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #fee2e2", background: "#fff5f5", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#FEF2F2", color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowDeleteConfirm(true)}
           >
-            🗑 Delete
+            Delete
           </button>
         </div>
 
-        {showDeleteConfirm && (
-          <ConfirmDialog
-            title="Delete Patient"
-            message={`Are you sure you want to delete ${p.name}? This cannot be undone.`}
-            confirmLabel="Delete"
-            onConfirm={async () => { await handleDelete(p.id); setShowDeleteConfirm(false); }}
-            onCancel={() => setShowDeleteConfirm(false)}
-          />
-        )}
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          title="Delete Patient"
+          message={`Are you sure you want to delete ${p.name}? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={async () => { await handleDelete(p.id); setShowDeleteConfirm(false); }}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
       </div>
     );
   }
@@ -117,13 +136,22 @@ export default function PatientListPage() {
   if (isMobile) {
     return (
       <Layout title="Patients">
-        {/* Mobile search bar */}
-        <input
-          className="mobile-search-bar"
-          placeholder="Search name or mobile…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-        />
+        {/* Mobile search bar with icon */}
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <svg
+            style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+            width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            className="mobile-search-bar"
+            style={{ paddingLeft: 36 }}
+            placeholder="Search name or mobile…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          />
+        </div>
 
         {/* Status filter chips */}
         <div className="mobile-filter-row">

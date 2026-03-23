@@ -5,6 +5,14 @@ import Layout from "../../components/layout/Layout";
 import { getDashboardStats, DashboardStats } from "../../api/analytics";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
+// ── Mobile KPI accent config ───────────────────────────────────────────────
+const KPI_ACCENT = [
+  { accent: "#6366F1", bg: "#EEF2FF" },  // Active Patients — indigo
+  { accent: "#1A7A6E", bg: "#E8F5F3" },  // This Week — teal
+  { accent: "#10B981", bg: "#D1FAE5" },  // Revenue — emerald
+  { accent: "#F59E0B", bg: "#FEF3C7" },  // Upcoming — amber
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtRupees(n: number): string {
@@ -45,21 +53,21 @@ function useCountUp(target: number, duration = 700): number {
 }
 
 function StatCard({
-  label, value, rawValue, sub, accent,
-}: { label: string; value: string | number; rawValue?: number; sub?: string; accent?: "green" | "red" | "default" }) {
+  label, value, rawValue, sub, accent, mobileAccent, mobileBg,
+}: { label: string; value: string | number; rawValue?: number; sub?: string; accent?: "green" | "red" | "default"; mobileAccent?: string; mobileBg?: string }) {
   const animated = useCountUp(rawValue ?? 0);
-  const accentColor = accent === "green" ? "#2d6b5f" : accent === "red" ? "#c0392b" : "#1a2535";
+  const accentColor = accent === "green" ? "#1A7A6E" : accent === "red" ? "#EF4444" : "#0F172A";
   const displayValue = rawValue !== undefined ? animated : value;
   return (
-    <div style={card}>
-      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+    <div style={{ ...card, background: mobileBg ?? card.background, borderTop: mobileAccent ? `3px solid ${mobileAccent}` : undefined }}>
+      <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
         {label}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: accentColor, lineHeight: 1 }}>
+      <div style={{ fontSize: 28, fontWeight: 800, color: mobileAccent ?? accentColor, lineHeight: 1 }}>
         {displayValue}
       </div>
       {sub && (
-        <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 5 }}>{sub}</div>
+        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 5 }}>{sub}</div>
       )}
     </div>
   );
@@ -136,12 +144,16 @@ export default function DashboardPage() {
                 value={stats.totalActivePatients}
                 rawValue={stats.totalActivePatients}
                 sub={`+${stats.newPatientsThisMonth} new`}
+                mobileAccent={KPI_ACCENT[0].accent}
+                mobileBg={KPI_ACCENT[0].bg}
               />
               <StatCard
                 label="This Week"
                 value={stats.sessionsThisWeek.completed + stats.sessionsThisWeek.upcoming + stats.sessionsThisWeek.cancelled}
                 rawValue={stats.sessionsThisWeek.completed + stats.sessionsThisWeek.upcoming + stats.sessionsThisWeek.cancelled}
                 sub={`${stats.sessionsThisWeek.completed} done`}
+                mobileAccent={KPI_ACCENT[1].accent}
+                mobileBg={KPI_ACCENT[1].bg}
               />
               {(() => {
                 const rev = stats.revenueThisMonth;
@@ -154,6 +166,8 @@ export default function DashboardPage() {
                     value={fmtRupees(rev)}
                     sub={pct !== null ? `${up ? "▲" : "▼"} ${Math.abs(pct)}%` : "No prev data"}
                     accent={pct !== null ? (up ? "green" : "red") : "default"}
+                    mobileAccent={KPI_ACCENT[2].accent}
+                    mobileBg={KPI_ACCENT[2].bg}
                   />
                 );
               })()}
@@ -162,6 +176,8 @@ export default function DashboardPage() {
                 value={stats.upcomingThisWeekCount}
                 rawValue={stats.upcomingThisWeekCount}
                 sub="this week"
+                mobileAccent={KPI_ACCENT[3].accent}
+                mobileBg={KPI_ACCENT[3].bg}
               />
             </div>
           ) : (
@@ -215,47 +231,60 @@ export default function DashboardPage() {
 
               {/* Today's Sessions — mobile cards */}
               <div style={sectionCard}>
-                <div style={sectionTitle}>Today's Sessions</div>
+                <div className="section-label" style={{ marginTop: 0 }}>Today's Sessions</div>
                 {stats.upcomingToday.length === 0 ? (
-                  <div style={{ color: "#94a3b8", fontSize: 11, paddingTop: 8 }}>No sessions scheduled for today.</div>
+                  <div style={{ color: "#94A3B8", fontSize: 13, paddingTop: 8 }}>No sessions scheduled for today.</div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {stats.upcomingToday.map((s) => (
-                      <div key={s.id} style={{ padding: "10px 12px", background: "#fdfbf9", borderRadius: 8, border: "1px solid #ede7df" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2535" }}>{s.patientName}</div>
-                            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{s.therapistName}</div>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "#2d6b5f" }}>{fmtTime(s.startTime)}</div>
-                            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{fmtDuration(s.durationMins)}</div>
+                    {stats.upcomingToday.map((s) => {
+                      const isPast = new Date(s.startTime) < new Date();
+                      return (
+                        <div key={s.id} style={{ padding: "10px 12px", background: "#F8FAFC", borderRadius: 10, border: "1px solid #EEF2F7" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: "#0F172A" }}>{s.patientName}</div>
+                              <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{s.therapistName}</div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <span style={{
+                                display: "inline-block",
+                                padding: "3px 10px",
+                                borderRadius: 9999,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                background: isPast ? "#D1FAE5" : "#E8F5F3",
+                                color: isPast ? "#065F46" : "#1A7A6E",
+                              }}>
+                                {fmtTime(s.startTime)}
+                              </span>
+                              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{fmtDuration(s.durationMins)}</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
 
               {/* Therapist Utilisation — mobile */}
               <div style={sectionCard}>
-                <div style={sectionTitle}>Therapist Activity (This Week)</div>
+                <div className="section-label" style={{ marginTop: 0 }}>Therapist Activity (This Week)</div>
                 {stats.therapistUtilisation.length === 0 ? (
-                  <div style={{ color: "#94a3b8", fontSize: 11, paddingTop: 8 }}>No session data.</div>
+                  <div style={{ color: "#94A3B8", fontSize: 13, paddingTop: 8 }}>No session data.</div>
                 ) : (() => {
                   const max = Math.max(...stats.therapistUtilisation.map((t) => t.sessionsThisWeek), 1);
                   return (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 4 }}>
                       {stats.therapistUtilisation.map((t) => (
                         <div key={t.id}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
                             <span style={{ color: "#334155", fontWeight: 500 }}>{t.name}</span>
-                            <span style={{ color: "#64748b" }}>{t.sessionsThisWeek} sessions</span>
+                            <span style={{ color: "#64748B" }}>{t.sessionsThisWeek} sessions</span>
                           </div>
-                          <div style={{ background: "#e2e8f0", borderRadius: 4, height: 6 }}>
+                          <div style={{ background: "#E2E8F0", borderRadius: 4, height: 6 }}>
                             <div style={{
-                              background: "linear-gradient(90deg, #2d6b5f, #4aa895)",
+                              background: "linear-gradient(90deg, #1A7A6E, #34D399)",
                               borderRadius: 4,
                               height: 6,
                               width: `${(t.sessionsThisWeek / max) * 100}%`,
@@ -271,22 +300,22 @@ export default function DashboardPage() {
 
               {/* Referral Sources — mobile */}
               <div style={sectionCard}>
-                <div style={sectionTitle}>Referral Sources</div>
+                <div className="section-label" style={{ marginTop: 0 }}>Referral Sources</div>
                 {stats.referralSources.length === 0 ? (
-                  <div style={{ color: "#94a3b8", fontSize: 11, paddingTop: 8 }}>No referral data.</div>
+                  <div style={{ color: "#94A3B8", fontSize: 13, paddingTop: 8 }}>No referral data.</div>
                 ) : (() => {
                   const total = stats.referralSources.reduce((s, r) => s + r.count, 0);
-                  const colours = ["#2d6b5f", "#4aa895", "#7fd4c4", "#a8e6da", "#c8f0ea", "#ddf6f2"];
+                  const colours = ["#1A7A6E", "#6366F1", "#F59E0B", "#EF4444", "#8B5CF6", "#0EA5E9"];
                   return (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
                       {stats.referralSources.map((r, i) => {
                         const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
                         return (
                           <div key={r.source} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                             <div style={{ width: 8, height: 8, borderRadius: "50%", background: colours[i % colours.length], flexShrink: 0 }} />
-                            <div style={{ flex: 1, fontSize: 12, color: "#334155" }}>{r.source}</div>
-                            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{r.count}</div>
-                            <div style={{ fontSize: 11, color: "#94a3b8", minWidth: 30, textAlign: "right" }}>{pct}%</div>
+                            <div style={{ flex: 1, fontSize: 13, color: "#334155" }}>{r.source}</div>
+                            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>{r.count}</div>
+                            <div style={{ fontSize: 12, color: "#94A3B8", minWidth: 30, textAlign: "right" }}>{pct}%</div>
                           </div>
                         );
                       })}
@@ -395,35 +424,35 @@ export default function DashboardPage() {
 
 const card: React.CSSProperties = {
   background: "#ffffff",
-  borderRadius: 10,
+  borderRadius: 14,
   padding: "16px 18px",
   flex: "1 1 140px",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
   minWidth: 140,
 };
 
 const sectionCard: React.CSSProperties = {
   background: "#ffffff",
-  borderRadius: 10,
+  borderRadius: 14,
   padding: "16px 18px",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
 };
 
 const sectionTitle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
-  color: "#1a2535",
+  color: "#0F172A",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
   marginBottom: 10,
-  borderBottom: "1px solid #f1f5f9",
+  borderBottom: "1px solid #F1F5F9",
   paddingBottom: 8,
 };
 
 const th: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 600,
-  color: "#94a3b8",
+  color: "#94A3B8",
   textAlign: "left",
   padding: "4px 8px",
   textTransform: "uppercase",
@@ -431,7 +460,7 @@ const th: React.CSSProperties = {
 };
 
 const td: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "#334155",
   padding: "6px 8px",
 };

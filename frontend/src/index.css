@@ -2,43 +2,43 @@
 
 /* ── Design tokens ────────────────────────────────────────────────────────── */
 :root {
-  --bg:            #eee8e0;
-  --surface:       #ffffff;
-  --border:        #ddd5cb;
-  --border-light:  #ede7df;
-  --accent:        #2d6b5f;
-  --accent-dark:   #1e4d44;
-  --accent-light:  #e4f2ee;
-  --text:          #1a2535;
-  --text-muted:    #64748b;
-  --text-faint:    #a8b4c0;
-  --error:         #dc2626;
-  --error-bg:      #fef2f2;
-  --shadow-sm:     0 1px 2px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.04);
-  --shadow-md:     0 2px 8px rgba(0,0,0,0.07), 0 8px 24px rgba(0,0,0,0.05);
-  --shadow-lg:     0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
-  --radius-sm:     6px;
-  --radius-md:     10px;
-  --radius-lg:     14px;
+  --bg:            #F0F4F8;
+  --surface:       #FFFFFF;
+  --border:        #E2E8F0;
+  --border-light:  #EEF2F7;
+  --accent:        #1A7A6E;
+  --accent-dark:   #146156;
+  --accent-light:  #E8F5F3;
+  --text:          #0F172A;
+  --text-muted:    #64748B;
+  --text-faint:    #94A3B8;
+  --error:         #EF4444;
+  --error-bg:      #FEF2F2;
+  --shadow-sm:     0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:     0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:     0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+  --radius-sm:     8px;
+  --radius-md:     12px;
+  --radius-lg:     16px;
   --radius-full:   9999px;
   --t-fast:        0.12s ease;
   --t-normal:      0.2s ease;
 
   /* Colour tokens */
-  --color-success: #2d6b5f;
-  --color-danger:  #dc2626;
-  --color-warning: #d97706;
-  --color-info:    #0284c7;
-  --color-muted:   #64748b;
-  --color-faint:   #94a3b8;
+  --color-success: #10B981;
+  --color-danger:  #EF4444;
+  --color-warning: #F59E0B;
+  --color-info:    #6366F1;
+  --color-muted:   #64748B;
+  --color-faint:   #94A3B8;
 
   /* Dimension tokens — typography */
-  --text-xs:  10px;
-  --text-sm:  12px;
-  --text-base: 14px;
-  --text-lg:  16px;
-  --text-xl:  20px;
-  --text-2xl: 26px;
+  --text-xs:   11px;
+  --text-sm:   13px;
+  --text-base: 15px;
+  --text-lg:   17px;
+  --text-xl:   21px;
+  --text-2xl:  27px;
 
   /* Dimension tokens — spacing */
   --space-xs: 4px;
@@ -54,7 +54,7 @@
 html, body {
   margin: 0; padding: 0; height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
-  font-size: 13px;
+  font-size: 15px;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -65,8 +65,8 @@ html, body {
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #ccc4bb; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #b0a89e; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 /* ── Button base ──────────────────────────────────────────────────────────── */
 button {
@@ -89,7 +89,7 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(45, 107, 95, 0.12);
+  box-shadow: 0 0 0 3px rgba(26, 122, 110, 0.12);
 }
 
 /* ── Table rows — hover via CSS (no component changes needed) ─────────────── */
@@ -98,11 +98,11 @@ input:focus, select:focus, textarea:focus {
 }
 
 .table-scroll tbody tr:hover {
-  background: #f7f2eb !important;
+  background: #F0F4F8 !important;
 }
 
 .table-scroll table tbody tr:hover {
-  background: #f8f6f3 !important;
+  background: #F0F4F8 !important;
 }
 
 /* ── Sticky table headers ────────────────────────────────────────────────── */
@@ -173,6 +173,50 @@ input:focus, select:focus, textarea:focus {
   display: none;
 }
 
+/* ── Avatar circle ────────────────────────────────────────────────────────── */
+.avatar-circle {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── Status border left on cards ──────────────────────────────────────────── */
+.card-status-upcoming    { border-left: 3px solid #6366F1; }
+.card-status-completed   { border-left: 3px solid #10B981; }
+.card-status-cancelled   { border-left: 3px solid #EF4444; }
+.card-status-no_show     { border-left: 3px solid #F59E0B; }
+.card-status-rescheduled { border-left: 3px solid #8B5CF6; }
+
+/* ── Alert banner ─────────────────────────────────────────────────────────── */
+.alert-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: 12px;
+  margin-bottom: 14px; font-size: 13px; font-weight: 600;
+}
+.alert-banner-warning { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+.alert-banner-danger  { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+.alert-banner-success { background: #D1FAE5; color: #065F46; border: 1px solid #A7F3D0; }
+
+/* ── Page header style ────────────────────────────────────────────────────── */
+.page-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0F172A;
+  letter-spacing: -0.3px;
+}
+
+/* ── Section label ────────────────────────────────────────────────────────── */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 16px 0 8px;
+}
+
 /* ── Mobile Web Styles (≤640px) ────────────────────────────────────────────── */
 
 /* Bottom safe area for iOS */
@@ -190,12 +234,15 @@ input:focus, select:focus, textarea:focus {
   /* Cards take full width */
   .mobile-card {
     background: #fff;
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 14px 16px;
     margin-bottom: 10px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    border: 1px solid #ede7df;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border: 1px solid #EEF2F7;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
+
+  .mobile-card:active { transform: scale(0.99); box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
 
   /* Mobile card header row */
   .mobile-card-header {
@@ -206,20 +253,20 @@ input:focus, select:focus, textarea:focus {
   }
 
   .mobile-card-title {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
-    color: #1a2535;
+    color: #0F172A;
   }
 
   .mobile-card-subtitle {
-    font-size: 12px;
-    color: #64748b;
+    font-size: 13px;
+    color: #64748B;
     margin-top: 2px;
   }
 
   .mobile-card-meta {
-    font-size: 12px;
-    color: #64748b;
+    font-size: 13px;
+    color: #64748B;
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
@@ -231,7 +278,7 @@ input:focus, select:focus, textarea:focus {
     gap: 8px;
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px solid #f0ece6;
+    border-top: 1px solid #EEF2F7;
   }
 
   /* Hide desktop tables on mobile */
@@ -263,7 +310,11 @@ input:focus, select:focus, textarea:focus {
   }
 
   /* Larger touch targets */
-  button { min-height: 36px; }
+  button { min-height: 44px; }
+  input, select, textarea { min-height: 48px; font-size: 16px !important; }
+
+  /* Mobile bottom nav active color */
+  .mobile-bottom-nav-item-active { color: #1A7A6E !important; }
 
   /* Mobile page header */
   .mobile-page-header {
@@ -277,9 +328,9 @@ input:focus, select:focus, textarea:focus {
   .mobile-search-bar {
     width: 100%;
     padding: 10px 14px;
-    border: 1px solid #ddd5cb;
-    border-radius: 10px;
-    font-size: 14px;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    font-size: 16px;
     background: #fff;
     margin-bottom: 12px;
   }
@@ -298,52 +349,57 @@ input:focus, select:focus, textarea:focus {
 
   .mobile-filter-chip {
     flex-shrink: 0;
-    padding: 6px 12px;
-    border-radius: 20px;
-    border: 1px solid #ddd5cb;
+    padding: 0 14px;
+    height: 36px;
+    border-radius: 9999px;
+    border: 1px solid #E2E8F0;
     background: #fff;
-    font-size: 12px;
-    color: #64748b;
+    font-size: 13px;
+    color: #64748B;
     cursor: pointer;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
 
   .mobile-filter-chip.active {
-    background: #2d6b5f;
-    border-color: #2d6b5f;
+    background: #1A7A6E;
+    border-color: #1A7A6E;
     color: #fff;
   }
 
   /* Floating action button */
   .fab {
     position: fixed;
-    bottom: 76px;
+    bottom: 80px;
     right: 16px;
     width: 52px;
     height: 52px;
     border-radius: 50%;
-    background: #2d6b5f;
+    background: #1A7A6E;
     color: #fff;
     border: none;
     font-size: 24px;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(45,107,95,0.4);
+    box-shadow: 0 4px 16px rgba(26,122,110,0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 50;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+    min-height: unset;
   }
 
   .fab:active { transform: scale(0.93); }
 
   /* Mobile section headers */
   .mobile-section-title {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
-    color: #64748b;
+    color: #94A3B8;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     margin: 16px 0 8px;
   }
 
@@ -365,11 +421,6 @@ input:focus, select:focus, textarea:focus {
     padding: 12px 16px;
     min-width: 130px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-  }
-
-  /* Mobile form improvements */
-  input, select, textarea {
-    font-size: 16px !important; /* Prevents iOS zoom */
   }
 
   /* Content padding on mobile */
