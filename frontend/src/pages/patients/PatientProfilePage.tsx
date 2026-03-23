@@ -289,7 +289,7 @@ export default function PatientProfilePage() {
   // ── Mobile render ──────────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <Layout title={`${patient.patientNumber}`}>
+      <Layout title={patient.name}>
         {/* Mobile breadcrumb row */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <button style={s.backBtn} onClick={() => navigate("/patients")}>← Patients</button>

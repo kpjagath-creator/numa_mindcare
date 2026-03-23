@@ -6,13 +6,16 @@ import Layout from "../../components/layout/Layout";
 import TeamTable from "../../components/team/TeamTable";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import type { TeamMember } from "../../types/index";
 import { listTeamMembers, deleteTeamMember } from "../../api/teamMembers";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { useToast } from "../../components/ui/Toast";
 
 export default function TeamListPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { showToast } = useToast();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +38,59 @@ export default function TeamListPage() {
     try {
       await deleteTeamMember(id);
       void loadMembers();
+      showToast("Team member deleted.", "success");
     } catch {
+      showToast("Failed to delete team member.", "error");
       setError("Failed to delete team member. Please try again.");
     }
+  }
+
+  // ── Mobile team card with actions ──────────────────────────────────────────
+  function MobileTeamCard({ m }: { m: TeamMember }) {
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    return (
+      <div className="mobile-card">
+        <div className="mobile-card-header" style={{ cursor: "pointer" }} onClick={() => navigate(`/team/${m.id}/patients`)}>
+          <div style={{ flex: 1 }}>
+            <div className="mobile-card-title">{m.name}</div>
+            <div className="mobile-card-subtitle">{m.employeeCode}</div>
+          </div>
+          <span style={{
+            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+            background: m.employeeType === "psychologist" ? "#e0f2fe" : "#f3e8ff",
+            color: m.employeeType === "psychologist" ? "#0369a1" : "#6b21a8",
+          }}>
+            {m.employeeType}
+          </span>
+        </div>
+        <div className="mobile-card-meta">
+          <span>{m.isActive ? "✅ Active" : "❌ Inactive"}</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #f0ece6" }}>
+          <button
+            style={{ flex: 2, padding: "8px 12px", borderRadius: 6, border: "none", background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            onClick={() => navigate(`/team/${m.id}/patients`)}
+          >
+            👥 View Patients
+          </button>
+          <button
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #fee2e2", background: "#fff5f5", color: "#dc2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            onClick={() => setShowDeleteConfirm(true)}
+          >
+            🗑 Delete
+          </button>
+        </div>
+        {showDeleteConfirm && (
+          <ConfirmDialog
+            title="Delete Team Member"
+            message={`Are you sure you want to delete ${m.name}? This cannot be undone.`}
+            confirmLabel="Delete"
+            onConfirm={async () => { await handleDelete(m.id); setShowDeleteConfirm(false); }}
+            onCancel={() => setShowDeleteConfirm(false)}
+          />
+        )}
+      </div>
+    );
   }
 
   // ── Mobile render ──────────────────────────────────────────────────────────
@@ -67,30 +120,7 @@ export default function TeamListPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {members.map((m) => (
-              <div
-                key={m.id}
-                className="mobile-card"
-                onClick={() => navigate(`/team/${m.id}/patients`)}
-                style={{ cursor: "pointer" }}
-              >
-                <div className="mobile-card-header">
-                  <div>
-                    <div className="mobile-card-title">{m.name}</div>
-                    <div className="mobile-card-subtitle">{m.employeeCode}</div>
-                  </div>
-                  <span style={{
-                    fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
-                    background: m.employeeType === "psychologist" ? "#e0f2fe" : "#f3e8ff",
-                    color: m.employeeType === "psychologist" ? "#0369a1" : "#6b21a8",
-                  }}>
-                    {m.employeeType}
-                  </span>
-                </div>
-                <div className="mobile-card-meta">
-                  <span>{m.isActive ? "Active" : "Inactive"}</span>
-                  <span style={{ color: "#2d6b5f", fontWeight: 600 }}>View patients →</span>
-                </div>
-              </div>
+              <MobileTeamCard key={m.id} m={m} />
             ))}
           </div>
         )}

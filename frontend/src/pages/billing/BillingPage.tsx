@@ -297,24 +297,24 @@ export default function BillingPage() {
   if (isMobile) {
     return (
       <Layout title="Billing">
-        {/* Revenue stats as horizontally scrollable cards */}
-        <div className="stats-scroll" style={{ marginBottom: 14 }}>
-          <div className="stat-chip">
-            <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Total Revenue</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1a2535" }}>{fmtRupees(stats.totalRevenue)}</div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>all completed sessions</div>
+        {/* Revenue stats as 3-column grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Revenue</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2535" }}>{fmtRupees(stats.totalRevenue)}</div>
+            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>completed</div>
           </div>
-          <div className="stat-chip">
-            <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Avg / Session</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#1a2535" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Avg/Session</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2535" }}>
               {stats.averageChargePerSession > 0 ? fmtRupees(stats.averageChargePerSession) : "—"}
             </div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>{stats.totalCompletedSessions} sessions</div>
+            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>{stats.totalCompletedSessions} sess.</div>
           </div>
-          <div className="stat-chip">
-            <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Outstanding</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: outstanding.length > 0 ? "#c2410c" : "#1a2535" }}>{outstanding.length}</div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>missing charges</div>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
+            <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Outstanding</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: outstanding.length > 0 ? "#c2410c" : "#1a2535" }}>{outstanding.length}</div>
+            <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>missing</div>
           </div>
         </div>
 
