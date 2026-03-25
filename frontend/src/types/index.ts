@@ -77,6 +77,8 @@ export type SessionStatus = "upcoming" | "completed" | "cancelled" | "no_show" |
 
 export type PaymentStatus = "unpaid" | "paid" | "partial";
 
+export type SessionType = "therapy" | "discovery";
+
 export interface TherapySession {
   id: number;
   patientId: number;
@@ -86,6 +88,7 @@ export interface TherapySession {
   startTime: string;
   endTime: string;
   durationMins: number;
+  sessionType: SessionType;
   status: SessionStatus;
   cancelReason: string | null;
   charges: number | null;

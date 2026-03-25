@@ -1,6 +1,7 @@
 // Schedule list page — all therapy sessions with filters and add modal.
 
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../../components/layout/Layout";
 import AddSessionModal from "../../components/schedule/AddSessionModal";
 import SessionsTable from "../../components/schedule/SessionsTable";
@@ -59,6 +60,7 @@ function PaymentPill({ status }: { status: string }) {
 
 export default function ScheduleListPage() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<TherapySession[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: LIMIT, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -118,8 +120,8 @@ export default function ScheduleListPage() {
     catch { showToast("Failed to cancel session.", "error"); }
   }
 
-  async function handleComplete(id: number, charges?: number) {
-    try { await completeSession(id, charges); void fetchSessions(); showToast("Session marked completed.", "success"); }
+  async function handleComplete(id: number, charges?: number, notes?: string) {
+    try { await completeSession(id, charges, notes); void fetchSessions(); showToast("Session marked completed.", "success"); }
     catch { showToast("Failed to complete session.", "error"); }
   }
 
@@ -172,6 +174,8 @@ export default function ScheduleListPage() {
     const [cancelReason, setCancelReason] = useState("");
     const [showCompleteInput, setShowCompleteInput] = useState(false);
     const [charges, setCharges] = useState("");
+    const [discoveryNotes, setDiscoveryNotes] = useState("");
+    const [discoveryNotesError, setDiscoveryNotesError] = useState("");
     const [showRescheduleForm, setShowRescheduleForm] = useState(false);
     const [reschedDate, setReschedDate] = useState("");
     const [reschedTime, setReschedTime] = useState("");
@@ -198,10 +202,26 @@ export default function ScheduleListPage() {
         {/* Card header */}
         <div className="mobile-card-header">
           <div style={{ flex: 1 }}>
-            <div className="mobile-card-title">{sess.patient.name}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                className="mobile-card-title"
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#1A7A6E", textAlign: "left", fontWeight: 700 }}
+                onClick={() => navigate(`/patients/${sess.patientId}`)}
+              >
+                {sess.patient.name}
+              </button>
+              {sess.sessionType === "discovery" && (
+                <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px" }}>Discovery</span>
+              )}
+            </div>
             <div className="mobile-card-subtitle">{sess.therapist.name}</div>
           </div>
-          <StatusPill status={sess.status} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+              <StatusPill status={sess.status} />
+              {sess.sessionType === "discovery" && (
+                <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px" }}>Discovery</span>
+              )}
+            </div>
         </div>
 
         {/* Meta row */}
@@ -275,16 +295,38 @@ export default function ScheduleListPage() {
             {/* Complete inline form */}
             {showCompleteInput && (
               <div style={{ background: "#f0fdf4", borderRadius: 8, padding: 10, marginBottom: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>Mark as Completed</div>
-                <input
-                  type="number"
-                  placeholder="Charges (optional)"
-                  value={charges}
-                  onChange={(e) => setCharges(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, marginBottom: 8 }}
-                />
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>
+                  {sess.sessionType === "discovery" ? "Complete Discovery Call" : "Mark as Completed"}
+                </div>
+                {sess.sessionType === "discovery" ? (
+                  <>
+                    <textarea
+                      placeholder="Discovery call notes (required)"
+                      value={discoveryNotes}
+                      onChange={(e) => { setDiscoveryNotes(e.target.value); setDiscoveryNotesError(""); }}
+                      style={{ width: "100%", padding: "8px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, marginBottom: 4, minHeight: 80, resize: "vertical", boxSizing: "border-box" }}
+                    />
+                    {discoveryNotesError && <p style={{ fontSize: 11, color: "#b91c1c", margin: "0 0 6px" }}>{discoveryNotesError}</p>}
+                  </>
+                ) : (
+                  <input
+                    type="number"
+                    placeholder="Charges (optional)"
+                    value={charges}
+                    onChange={(e) => setCharges(e.target.value)}
+                    style={{ width: "100%", padding: "8px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, marginBottom: 8 }}
+                  />
+                )}
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button style={{ ...btnStyle("#fff", "#2d6b5f"), flex: 2 }} onClick={async () => { await handleComplete(sess.id, charges ? parseFloat(charges) : undefined); setShowCompleteInput(false); setExpanded(false); }}>
+                  <button style={{ ...btnStyle("#fff", "#2d6b5f"), flex: 2 }} onClick={async () => {
+                    if (sess.sessionType === "discovery") {
+                      if (!discoveryNotes.trim()) { setDiscoveryNotesError("Notes are required."); return; }
+                      await handleComplete(sess.id, undefined, discoveryNotes.trim());
+                    } else {
+                      await handleComplete(sess.id, charges ? parseFloat(charges) : undefined);
+                    }
+                    setShowCompleteInput(false); setExpanded(false);
+                  }}>
                     Confirm Complete
                   </button>
                   <button style={{ ...btnStyle("#64748b", "#f1f5f9"), flex: 1 }} onClick={() => setShowCompleteInput(false)}>Cancel</button>

@@ -1,6 +1,4 @@
 // Patient status definitions and transition map.
-// The transition map is stubbed here for Phase 3+ — currently all transitions
-// are open (any status → any status). Restrictions will be enforced in a future phase.
 
 import type { PatientStatus } from "../types/index";
 
@@ -24,14 +22,26 @@ export const STATUS_LABELS: Record<PatientStatus, string> = {
   patient_dropped: "Patient Dropped",
 };
 
-// Future: restrict which statuses can follow which.
-// For now every status is reachable from every other status.
+// Workflow transitions:
+// created → discovery_scheduled  (auto: scheduling a discovery call)
+// discovery_scheduled → discovery_completed  (auto: completing the discovery session)
+// discovery_completed → started_therapy  (auto: scheduling first therapy session)
+// started_therapy → schedule_completed | therapy_paused | patient_dropped  (manual, from patient profile)
+// therapy_paused → started_therapy | patient_dropped  (manual)
+// schedule_completed / patient_dropped → terminal states
 export const STATUS_TRANSITIONS: Record<PatientStatus, PatientStatus[]> = {
-  created: PATIENT_STATUSES,
-  discovery_scheduled: PATIENT_STATUSES,
-  discovery_completed: PATIENT_STATUSES,
-  started_therapy: PATIENT_STATUSES,
-  therapy_paused: PATIENT_STATUSES,
-  schedule_completed: PATIENT_STATUSES,
-  patient_dropped: PATIENT_STATUSES,
+  created: [],                          // transitions via scheduling a discovery call
+  discovery_scheduled: [],              // transitions via completing the discovery session
+  discovery_completed: [],              // transitions via scheduling first therapy session
+  started_therapy: ["schedule_completed", "therapy_paused", "patient_dropped"],
+  therapy_paused: ["started_therapy", "patient_dropped"],
+  schedule_completed: [],
+  patient_dropped: [],
+};
+
+// Human-readable hint for what triggers the next automatic transition
+export const STATUS_NEXT_ACTION_HINT: Partial<Record<PatientStatus, string>> = {
+  created: "Schedule a discovery call to move this patient forward.",
+  discovery_scheduled: "Complete the discovery session to advance to Discovery Completed.",
+  discovery_completed: "Schedule a therapy session to move to Started Therapy.",
 };

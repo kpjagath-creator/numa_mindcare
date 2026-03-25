@@ -9,6 +9,7 @@ export interface CreateSessionPayload {
   session_date: string;
   start_time: string;
   duration_mins: number;
+  session_type?: "therapy" | "discovery";
   notes?: string;
 }
 
@@ -45,10 +46,12 @@ export async function cancelSession(id: number, reason: string): Promise<Therapy
   return res.data.data.session;
 }
 
-export async function completeSession(id: number, charges?: number): Promise<TherapySession> {
+export async function completeSession(id: number, charges?: number, notes?: string): Promise<TherapySession> {
+  const body: Record<string, unknown> = {};
+  if (charges !== undefined) body.charges = charges;
+  if (notes !== undefined) body.notes = notes;
   const res = await api.patch<{ success: true; data: { session: TherapySession } }>(
-    `/therapy-sessions/${id}/complete`,
-    charges !== undefined ? { charges } : {}
+    `/therapy-sessions/${id}/complete`, body
   );
   return res.data.data.session;
 }

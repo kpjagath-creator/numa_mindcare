@@ -1,6 +1,7 @@
 // Reusable table for listing therapy sessions with cancel, complete, delete, reschedule, no-show, and payment actions.
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { TherapySession, PaymentStatus } from "../../types/index";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import SessionActionsDropdown from "./SessionActionsDropdown";
@@ -10,7 +11,7 @@ interface Props {
   showPatient?: boolean;
   showTherapist?: boolean;
   onCancel?: (id: number, reason: string) => void;
-  onComplete?: (id: number, charges?: number) => void;
+  onComplete?: (id: number, charges?: number, notes?: string) => void;
   onDelete?: (id: number) => void;
   onReschedule?: (id: number, payload: { session_date: string; start_time: string; duration_mins: number; notes?: string }) => void;
   onNoShow?: (id: number, no_show_fee?: number) => void;
@@ -77,6 +78,8 @@ export default function SessionsTable({
   const [completeId, setCompleteId] = useState<number | null>(null);
   const [chargesInput, setChargesInput] = useState("");
   const [chargesError, setChargesError] = useState("");
+  const [discoveryNotes, setDiscoveryNotes] = useState("");
+  const [discoveryNotesError, setDiscoveryNotesError] = useState("");
 
   const [rescheduleId, setRescheduleId] = useState<number | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -106,14 +109,22 @@ export default function SessionsTable({
   }
 
   function submitComplete() {
-    const trimmed = chargesInput.trim();
-    if (trimmed !== "" && (isNaN(Number(trimmed)) || Number(trimmed) < 0)) {
-      setChargesError("Enter a valid positive amount or leave blank.");
-      return;
+    if (completeId === null || !onComplete) return;
+    const completingSess = sessions.find((s) => s.id === completeId);
+    if (completingSess?.sessionType === "discovery") {
+      if (!discoveryNotes.trim()) { setDiscoveryNotesError("Notes are required to complete a discovery call."); return; }
+      onComplete(completeId, undefined, discoveryNotes.trim());
+      setCompleteId(null); setDiscoveryNotes(""); setDiscoveryNotesError("");
+    } else {
+      const trimmed = chargesInput.trim();
+      if (trimmed !== "" && (isNaN(Number(trimmed)) || Number(trimmed) < 0)) {
+        setChargesError("Enter a valid positive amount or leave blank.");
+        return;
+      }
+      const charges = trimmed !== "" ? Number(trimmed) : undefined;
+      onComplete(completeId, charges);
+      setCompleteId(null); setChargesInput(""); setChargesError("");
     }
-    const charges = trimmed !== "" ? Number(trimmed) : undefined;
-    if (completeId !== null && onComplete) onComplete(completeId, charges);
-    setCompleteId(null); setChargesInput(""); setChargesError("");
   }
 
   function submitReschedule() {
@@ -189,8 +200,13 @@ export default function SessionsTable({
                 <tr key={sess.id} style={s.row}>
                   {showPatient && (
                     <td style={s.td}>
-                      <span style={s.name}>{sess.patient.name}</span>
+                      <Link to={`/patients/${sess.patientId}`} style={{ color: "#1A7A6E", fontWeight: 600, fontSize: 12, textDecoration: "none" }}>
+                        {sess.patient.name}
+                      </Link>
                       <span style={s.sub}>{sess.patient.patientNumber}</span>
+                      {sess.sessionType === "discovery" && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px", marginLeft: 4 }}>Discovery</span>
+                      )}
                     </td>
                   )}
                   {showTherapist && (
@@ -207,6 +223,9 @@ export default function SessionsTable({
                     <span style={{ ...s.badge, ...(STATUS_BADGE[statusKey] ?? STATUS_BADGE.completed) }}>
                       {STATUS_ICON[statusKey] ?? ""} {statusKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
                     </span>
+                    {sess.sessionType === "discovery" && (
+                      <span style={{ display: "block", marginTop: 3, fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px", width: "fit-content" }}>Discovery</span>
+                    )}
                   </td>
                   <td style={s.td}>
                     {sess.charges !== null && sess.charges !== undefined
@@ -257,40 +276,65 @@ export default function SessionsTable({
         </table>
       </div>
 
-      {/* Complete + charges modal */}
-      {completeId !== null && (
-        <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setCompleteId(null); }}>
-          <div style={modalCard} className="modal-card">
-            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
-              Complete Session
-            </h3>
-            <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
-              Optionally record the session charges in {"\u20B9"} before marking as completed.
-            </p>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>
-              Session Charges ({"\u20B9"})
-            </label>
-            <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#8a96a3", fontSize: 13, fontWeight: 600 }}>{"\u20B9"}</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                style={{ ...s.chargesInput, paddingLeft: 24 }}
-                placeholder="e.g. 1500"
-                value={chargesInput}
-                onChange={(e) => { setChargesInput(e.target.value); setChargesError(""); }}
-                autoFocus
-              />
-            </div>
-            {chargesError && <p style={{ fontSize: 11, color: "#b91c1c", margin: "4px 0 0" }}>{chargesError}</p>}
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
-              <button style={s.modalCancelBtn} onClick={() => setCompleteId(null)}>Back</button>
-              <button style={s.modalCompleteBtn} onClick={submitComplete}>Mark Completed</button>
+      {/* Complete modal — discovery: mandatory notes; therapy: optional charges */}
+      {completeId !== null && (() => {
+        const completingSess = sessions.find((s) => s.id === completeId);
+        const isDiscovery = completingSess?.sessionType === "discovery";
+        return (
+          <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) { setCompleteId(null); setDiscoveryNotes(""); setDiscoveryNotesError(""); setChargesInput(""); setChargesError(""); } }}>
+            <div style={modalCard} className="modal-card">
+              <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
+                {isDiscovery ? "Complete Discovery Call" : "Complete Session"}
+              </h3>
+              {isDiscovery ? (
+                <>
+                  <p style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
+                    Add notes from the discovery call before marking as completed.
+                  </p>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>
+                    Discovery Notes *
+                  </label>
+                  <textarea
+                    style={{ ...s.chargesInput, minHeight: 100, resize: "vertical", padding: "8px 10px" }}
+                    placeholder="Summary of discovery call, observations, next steps…"
+                    value={discoveryNotes}
+                    onChange={(e) => { setDiscoveryNotes(e.target.value); setDiscoveryNotesError(""); }}
+                    autoFocus
+                  />
+                  {discoveryNotesError && <p style={{ fontSize: 11, color: "#b91c1c", margin: "4px 0 0" }}>{discoveryNotesError}</p>}
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+                    Optionally record the session charges in {"\u20B9"} before marking as completed.
+                  </p>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", display: "block", marginBottom: 4 }}>
+                    Session Charges ({"\u20B9"})
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#8a96a3", fontSize: 13, fontWeight: 600 }}>{"\u20B9"}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      style={{ ...s.chargesInput, paddingLeft: 24 }}
+                      placeholder="e.g. 1500"
+                      value={chargesInput}
+                      onChange={(e) => { setChargesInput(e.target.value); setChargesError(""); }}
+                      autoFocus
+                    />
+                  </div>
+                  {chargesError && <p style={{ fontSize: 11, color: "#b91c1c", margin: "4px 0 0" }}>{chargesError}</p>}
+                </>
+              )}
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
+                <button style={s.modalCancelBtn} onClick={() => { setCompleteId(null); setDiscoveryNotes(""); setDiscoveryNotesError(""); setChargesInput(""); setChargesError(""); }}>Back</button>
+                <button style={s.modalCompleteBtn} onClick={submitComplete}>Mark Completed</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Cancel reason modal */}
       {cancelId !== null && (

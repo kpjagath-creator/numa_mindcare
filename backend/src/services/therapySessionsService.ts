@@ -73,6 +73,8 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
       );
     }
 
+    const sessionType = input.session_type ?? "therapy";
+
     const session = await tx.therapySession.create({
       data: {
         patientId: input.patient_id,
@@ -80,11 +82,37 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
         startTime: startDt,
         endTime: endDt,
         durationMins: input.duration_mins,
+        sessionType,
         status: "upcoming",
         notes: input.notes ?? null,
       },
       include: sessionInclude,
     });
+
+    // Auto-advance patient status based on session type
+    if (sessionType === "discovery" && patient.currentStatus === "created") {
+      await tx.patient.update({ where: { id: input.patient_id }, data: { currentStatus: "discovery_scheduled" } });
+      await tx.patientStatusLog.create({
+        data: {
+          patientId: input.patient_id,
+          previousStatus: "created",
+          newStatus: "discovery_scheduled",
+          changedByName: "system",
+          notes: `Discovery call scheduled with ${therapist.name}.`,
+        },
+      });
+    } else if (sessionType === "therapy" && patient.currentStatus === "discovery_completed") {
+      await tx.patient.update({ where: { id: input.patient_id }, data: { currentStatus: "started_therapy" } });
+      await tx.patientStatusLog.create({
+        data: {
+          patientId: input.patient_id,
+          previousStatus: "discovery_completed",
+          newStatus: "started_therapy",
+          changedByName: "system",
+          notes: `First therapy session scheduled with ${therapist.name}.`,
+        },
+      });
+    }
 
     return mapSession(session);
   });
@@ -151,18 +179,40 @@ export async function cancelSession(id: number, input: CancelSessionInput): Prom
 // ── completeSession ────────────────────────────────────────────────────────────
 
 export async function completeSession(id: number, input: CompleteSessionInput): Promise<TherapySession> {
-  await getSessionById(id); // 404 guard
+  const existing = await getSessionById(id); // 404 guard
   const now = new Date();
-  const updated = await prisma.therapySession.update({
-    where: { id },
-    data: {
-      status: "completed",
-      endTime: now,
-      ...(input.charges !== undefined && { charges: input.charges }),
-    },
-    include: sessionInclude,
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.therapySession.update({
+      where: { id },
+      data: {
+        status: "completed",
+        endTime: now,
+        ...(input.charges !== undefined && { charges: input.charges }),
+        ...(input.notes !== undefined && { notes: input.notes }),
+      },
+      include: sessionInclude,
+    });
+
+    // Auto-advance patient to discovery_completed when a discovery session is completed
+    if (existing.sessionType === "discovery") {
+      const patient = await tx.patient.findUnique({ where: { id: existing.patientId } });
+      if (patient && patient.currentStatus === "discovery_scheduled") {
+        await tx.patient.update({ where: { id: existing.patientId }, data: { currentStatus: "discovery_completed" } });
+        await tx.patientStatusLog.create({
+          data: {
+            patientId: existing.patientId,
+            previousStatus: "discovery_scheduled",
+            newStatus: "discovery_completed",
+            changedByName: "system",
+            notes: "Discovery call completed.",
+          },
+        });
+      }
+    }
+
+    return mapSession(updated);
   });
-  return mapSession(updated);
 }
 
 // ── deleteSession ──────────────────────────────────────────────────────────────
@@ -335,6 +385,7 @@ function mapSession(raw: any): TherapySession {
     startTime: raw.startTime,
     endTime: raw.endTime,
     durationMins: raw.durationMins,
+    sessionType: raw.sessionType ?? "therapy",
     status: raw.status,
     cancelReason: raw.cancelReason ?? null,
     charges: raw.charges !== null && raw.charges !== undefined ? Number(raw.charges) : null,

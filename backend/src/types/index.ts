@@ -118,6 +118,8 @@ export interface SessionParticipant {
 export type SessionStatus = "upcoming" | "completed" | "cancelled" | "no_show" | "rescheduled";
 export type PaymentStatus = "unpaid" | "paid" | "partial";
 
+export type SessionType = "therapy" | "discovery";
+
 export interface TherapySession {
   id: number;
   patientId: number;
@@ -127,6 +129,7 @@ export interface TherapySession {
   startTime: Date;
   endTime: Date;
   durationMins: number;
+  sessionType: SessionType;
   status: SessionStatus;
   cancelReason: string | null;
   charges: number | null;
@@ -144,6 +147,7 @@ export interface CreateSessionInput {
   session_date: string;   // YYYY-MM-DD
   start_time: string;     // HH:MM
   duration_mins: number;
+  session_type?: SessionType;
   notes?: string;
 }
 
@@ -153,6 +157,7 @@ export interface CancelSessionInput {
 
 export interface CompleteSessionInput {
   charges?: number;
+  notes?: string;
 }
 
 export interface RescheduleSessionInput {

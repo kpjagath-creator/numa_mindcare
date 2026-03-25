@@ -74,6 +74,7 @@ model TherapySession {
   rescheduledFromId   Int?       @map("rescheduled_from_id")
   rescheduledFrom     TherapySession?  @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
   rescheduledTo       TherapySession[] @relation("Reschedule")
+  sessionType         String     @default("therapy") @map("session_type") // "therapy" | "discovery"
   notes               String?
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")

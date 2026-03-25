@@ -18,11 +18,12 @@ interface FormValues {
   session_date: string;
   start_time: string;
   duration_mins: string;
+  session_type: "therapy" | "discovery";
   notes: string;
 }
 
 const EMPTY: FormValues = {
-  patient_id: "", therapist_id: "", session_date: "", start_time: "", duration_mins: "50", notes: "",
+  patient_id: "", therapist_id: "", session_date: "", start_time: "", duration_mins: "50", session_type: "therapy", notes: "",
 };
 
 const DURATION_OPTIONS = [
@@ -124,6 +125,7 @@ export default function AddSessionModal({ onClose, onCreated }: Props) {
         session_date: form.session_date,
         start_time: form.start_time,
         duration_mins: parseInt(form.duration_mins, 10),
+        session_type: form.session_type,
         notes: form.notes.trim() || undefined,
       });
       onCreated();
@@ -137,19 +139,59 @@ export default function AddSessionModal({ onClose, onCreated }: Props) {
 
   const selectedTherapist = therapists.find((t) => String(t.id) === form.therapist_id);
 
-  const patientOptions = patients.map((p) => ({ value: String(p.id), label: `${p.patientNumber} — ${p.name}` }));
+  const filteredPatients = form.session_type === "discovery"
+    ? patients.filter((p) => p.currentStatus === "created")
+    : patients.filter((p) => p.currentStatus !== "created");
+
+  const patientOptions = filteredPatients.map((p) => ({ value: String(p.id), label: `${p.patientNumber} — ${p.name}` }));
   const therapistOptions = therapists.map((t) => ({ value: String(t.id), label: `${t.name} (${t.employeeType})` }));
 
   return (
     <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={modal} className="modal-card">
         <div style={s.header}>
-          <h2 style={s.title}>Schedule Therapy Session</h2>
+          <h2 style={s.title}>{form.session_type === "discovery" ? "Schedule Discovery Call" : "Schedule Therapy Session"}</h2>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
           {error && <div style={s.errorBanner}>{error}</div>}
+
+          {/* Session type toggle */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+            <button
+              type="button"
+              onClick={() => { set("session_type", "therapy"); set("patient_id", ""); set("therapist_id", ""); }}
+              style={{
+                flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
+                borderColor: form.session_type === "therapy" ? "#2d6b5f" : "#ddd5cb",
+                background: form.session_type === "therapy" ? "#2d6b5f" : "#fff",
+                color: form.session_type === "therapy" ? "#fff" : "#64748b",
+                fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Therapy Session
+            </button>
+            <button
+              type="button"
+              onClick={() => { set("session_type", "discovery"); set("patient_id", ""); set("therapist_id", ""); }}
+              style={{
+                flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
+                borderColor: form.session_type === "discovery" ? "#0369a1" : "#ddd5cb",
+                background: form.session_type === "discovery" ? "#0369a1" : "#fff",
+                color: form.session_type === "discovery" ? "#fff" : "#64748b",
+                fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Discovery Call
+            </button>
+          </div>
+
+          {form.session_type === "discovery" && (
+            <div style={{ background: "#e0f2fe", border: "1px solid #bae6fd", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 12, color: "#0369a1" }}>
+              Scheduling this will automatically move the patient to <strong>Discovery Scheduled</strong> status.
+            </div>
+          )}
 
           <div style={s.formGrid}>
             {/* Patient — searchable */}
@@ -275,7 +317,7 @@ export default function AddSessionModal({ onClose, onCreated }: Props) {
           <div style={s.actions}>
             <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
             <button type="submit" style={s.submitBtn} disabled={submitting}>
-              {submitting ? "Scheduling…" : "Schedule Session"}
+              {submitting ? "Scheduling…" : form.session_type === "discovery" ? "Schedule Discovery Call" : "Schedule Session"}
             </button>
           </div>
         </form>

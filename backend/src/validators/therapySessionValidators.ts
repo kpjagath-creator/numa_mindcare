@@ -10,6 +10,7 @@ export const createSessionSchema = z.object({
   session_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "session_date must be YYYY-MM-DD"),
   start_time: z.string().regex(/^\d{2}:\d{2}$/, "start_time must be HH:MM"),
   duration_mins: z.number({ invalid_type_error: "duration_mins must be a number" }).int().min(15, "minimum 15 minutes").max(480, "maximum 8 hours"),
+  session_type: z.enum(["therapy", "discovery"]).optional(),
   notes: z.string().optional(),
 });
 
@@ -19,6 +20,7 @@ export const cancelSessionSchema = z.object({
 
 export const completeSessionSchema = z.object({
   charges: z.number({ invalid_type_error: "charges must be a number" }).nonnegative("charges cannot be negative").optional(),
+  notes: z.string().optional(),
 });
 
 // ── POST /api/v1/therapy-sessions/:id/reschedule ─────────────────────────────

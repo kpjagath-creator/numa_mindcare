@@ -9,7 +9,7 @@ import StatusHistoryLog from "../../components/patients/StatusHistoryLog";
 import StatusHistoryModal from "../../components/patients/StatusHistoryModal";
 import Spinner from "../../components/ui/Spinner";
 import type { Patient, PatientStatusLog, TeamMember, TherapySession } from "../../types/index";
-import { PATIENT_STATUSES, STATUS_LABELS } from "../../constants/statuses";
+import { STATUS_LABELS, STATUS_TRANSITIONS, STATUS_NEXT_ACTION_HINT } from "../../constants/statuses";
 import { getPatient, getStatusLogs, updatePatientStatus, updatePatientTherapist, updatePatientInfo, deletePatient } from "../../api/patients";
 import { listTeamMembers } from "../../api/teamMembers";
 import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus } from "../../api/therapySessions";
@@ -199,12 +199,13 @@ export default function PatientProfilePage() {
     setUpdating(true);
     setUpdateError(null);
     try {
-      const updated = await updatePatientStatus(patientId, { new_status: newStatus, changed_by_name: nameToSubmit, notes: notes.trim() || undefined });
+      const updated = await updatePatientStatus(patientId, { new_status: newStatus as any, changed_by_name: nameToSubmit, notes: notes.trim() || undefined });
       setPatient(updated);
       setLogs(await getStatusLogs(patientId));
       setAdminName(nameToSubmit);
       setChangedByName("");
       setNotes("");
+      setNewStatus("");
       setShowCurrentStatus(false);
     } catch {
       setUpdateError("Failed to update status. Please try again.");
@@ -269,8 +270,18 @@ export default function PatientProfilePage() {
     setSessions(r.sessions);
   }
 
+  async function refreshPatientAndSessions() {
+    const [p, r] = await Promise.all([
+      getPatient(patientId),
+      listSessions({ patient_id: patientId, limit: 200 }),
+    ]);
+    setPatient(p);
+    setSessions(r.sessions);
+    setNewStatus("");
+  }
+
   async function handleSessionReschedule(id: number, payload: { session_date: string; start_time: string; duration_mins: number; notes?: string }) {
-    try { await rescheduleSession(id, payload); await refreshSessions(); showToast("Session rescheduled.", "success"); }
+    try { await rescheduleSession(id, payload); await refreshPatientAndSessions(); showToast("Session rescheduled.", "success"); }
     catch { showToast("Failed to reschedule session.", "error"); }
   }
 
@@ -441,8 +452,8 @@ export default function PatientProfilePage() {
               <SessionsTable
                 sessions={sessions}
                 showPatient={false}
-                onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshSessions(); showToast("Session cancelled.", "success"); }}
-                onComplete={async (id, charges) => { await completeSession(id, charges); await refreshSessions(); showToast("Session completed.", "success"); }}
+                onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshPatientAndSessions(); showToast("Session cancelled.", "success"); }}
+                onComplete={async (id, charges, notes) => { await completeSession(id, charges, notes); await refreshPatientAndSessions(); showToast("Session completed.", "success"); }}
                 onDelete={async (id) => { await deleteSession(id); await refreshSessions(); showToast("Session deleted.", "success"); }}
                 onReschedule={handleSessionReschedule}
                 onNoShow={handleSessionNoShow}
@@ -467,45 +478,76 @@ export default function PatientProfilePage() {
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1a2535" }}>Update Status</h2>
                 <button onClick={() => setShowCurrentStatus(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>✕</button>
               </div>
-              <form onSubmit={handleStatusUpdate}>
-                {updateError && <p style={s.apiError}>{updateError}</p>}
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-                  <div style={s.fieldCol}>
-                    <label style={s.label}>New Status *</label>
-                    <select style={{ ...s.select, width: "100%", boxSizing: "border-box" }} value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
-                      {PATIENT_STATUSES.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
-                    </select>
-                    {statusFieldError && <span style={s.fieldErr}>{statusFieldError}</span>}
-                  </div>
-                  <div style={s.fieldCol}>
-                    <label style={s.label}>Changed By *</label>
-                    <input
-                      style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
-                      value={changedByName || adminName}
-                      onChange={(e) => setChangedByName(e.target.value)}
-                      placeholder={adminName}
-                    />
-                    {nameFieldError && <span style={s.fieldErr}>{nameFieldError}</span>}
-                  </div>
-                  <div style={s.fieldCol}>
-                    <label style={s.label}>Notes / Reason</label>
-                    <textarea
-                      style={{ ...s.input, width: "100%", boxSizing: "border-box", minHeight: 80, resize: "vertical" }}
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Add context…"
-                    />
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button type="submit" style={{ ...s.updateBtn, flex: 2 }} disabled={updating}>
-                    {updating ? "Updating…" : "Update Status"}
-                  </button>
-                  <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, flex: 1 }}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
+              {(() => {
+                const validNext = STATUS_TRANSITIONS[patient.currentStatus] ?? [];
+                const hint = STATUS_NEXT_ACTION_HINT[patient.currentStatus];
+                if (validNext.length === 0) {
+                  return (
+                    <div>
+                      {hint && (
+                        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#1d4ed8" }}>
+                          {hint}
+                        </div>
+                      )}
+                      {!hint && (
+                        <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "10px 12px", fontSize: 12, color: "#64748b" }}>
+                          This status has no further transitions.
+                        </div>
+                      )}
+                      <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, marginTop: 10, width: "100%" }}>
+                        Close
+                      </button>
+                    </div>
+                  );
+                }
+                return (
+                  <form onSubmit={handleStatusUpdate}>
+                    {updateError && <p style={s.apiError}>{updateError}</p>}
+                    {hint && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 12, color: "#1d4ed8" }}>
+                        {hint}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+                      <div style={s.fieldCol}>
+                        <label style={s.label}>New Status *</label>
+                        <select style={{ ...s.select, width: "100%", boxSizing: "border-box" }} value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                          <option value="">— Select —</option>
+                          {validNext.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+                        </select>
+                        {statusFieldError && <span style={s.fieldErr}>{statusFieldError}</span>}
+                      </div>
+                      <div style={s.fieldCol}>
+                        <label style={s.label}>Changed By *</label>
+                        <input
+                          style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
+                          value={changedByName || adminName}
+                          onChange={(e) => setChangedByName(e.target.value)}
+                          placeholder={adminName}
+                        />
+                        {nameFieldError && <span style={s.fieldErr}>{nameFieldError}</span>}
+                      </div>
+                      <div style={s.fieldCol}>
+                        <label style={s.label}>Notes / Reason</label>
+                        <textarea
+                          style={{ ...s.input, width: "100%", boxSizing: "border-box", minHeight: 80, resize: "vertical" }}
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Add context…"
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button type="submit" style={{ ...s.updateBtn, flex: 2 }} disabled={updating}>
+                        {updating ? "Updating…" : "Update Status"}
+                      </button>
+                      <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, flex: 1 }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                );
+              })()}
             </div>
           </>
         )}
@@ -659,8 +701,8 @@ export default function PatientProfilePage() {
           <SessionsTable
             sessions={sessions}
             showPatient={false}
-            onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshSessions(); showToast("Session cancelled.", "success"); }}
-            onComplete={async (id, charges) => { await completeSession(id, charges); await refreshSessions(); showToast("Session completed.", "success"); }}
+            onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshPatientAndSessions(); showToast("Session cancelled.", "success"); }}
+            onComplete={async (id, charges, notes) => { await completeSession(id, charges, notes); await refreshPatientAndSessions(); showToast("Session completed.", "success"); }}
             onDelete={async (id) => { await deleteSession(id); await refreshSessions(); showToast("Session deleted.", "success"); }}
             onReschedule={handleSessionReschedule}
             onNoShow={handleSessionNoShow}
@@ -691,48 +733,79 @@ export default function PatientProfilePage() {
               <button onClick={() => setShowCurrentStatus(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8", padding: "2px 6px" }}>✕</button>
             </div>
 
-            <form onSubmit={handleStatusUpdate}>
-              {updateError && <p style={s.apiError}>{updateError}</p>}
+            {(() => {
+              const validNext = STATUS_TRANSITIONS[patient.currentStatus] ?? [];
+              const hint = STATUS_NEXT_ACTION_HINT[patient.currentStatus];
+              if (validNext.length === 0) {
+                return (
+                  <div>
+                    {hint && (
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 12, color: "#1d4ed8" }}>
+                        {hint}
+                      </div>
+                    )}
+                    {!hint && (
+                      <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "12px 16px", fontSize: 12, color: "#64748b" }}>
+                        This status has no further transitions.
+                      </div>
+                    )}
+                    <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, marginTop: 12 }}>
+                      Close
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <form onSubmit={handleStatusUpdate}>
+                  {updateError && <p style={s.apiError}>{updateError}</p>}
+                  {hint && (
+                    <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#1d4ed8" }}>
+                      {hint}
+                    </div>
+                  )}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                <div style={s.fieldCol}>
-                  <label style={s.label}>New Status *</label>
-                  <select style={{ ...s.select, padding: "10px 12px" }} value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
-                    {PATIENT_STATUSES.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
-                  </select>
-                  {statusFieldError && <span style={s.fieldErr}>{statusFieldError}</span>}
-                </div>
-                <div style={s.fieldCol}>
-                  <label style={s.label}>Changed By *</label>
-                  <input
-                    style={{ ...s.input, padding: "10px 12px" }}
-                    value={changedByName || adminName}
-                    onChange={(e) => setChangedByName(e.target.value)}
-                    placeholder={adminName}
-                  />
-                  {nameFieldError && <span style={s.fieldErr}>{nameFieldError}</span>}
-                </div>
-              </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                    <div style={s.fieldCol}>
+                      <label style={s.label}>New Status *</label>
+                      <select style={{ ...s.select, padding: "10px 12px" }} value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                        <option value="">— Select —</option>
+                        {validNext.map((st) => <option key={st} value={st}>{STATUS_LABELS[st]}</option>)}
+                      </select>
+                      {statusFieldError && <span style={s.fieldErr}>{statusFieldError}</span>}
+                    </div>
+                    <div style={s.fieldCol}>
+                      <label style={s.label}>Changed By *</label>
+                      <input
+                        style={{ ...s.input, padding: "10px 12px" }}
+                        value={changedByName || adminName}
+                        onChange={(e) => setChangedByName(e.target.value)}
+                        placeholder={adminName}
+                      />
+                      {nameFieldError && <span style={s.fieldErr}>{nameFieldError}</span>}
+                    </div>
+                  </div>
 
-              <div style={{ marginBottom: 20 }}>
-                <label style={s.label}>Notes / Reason</label>
-                <textarea
-                  style={{ ...s.input, width: "100%", boxSizing: "border-box", minHeight: 120, resize: "vertical", lineHeight: 1.65, marginTop: 4 }}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add context — e.g. patient paused sessions due to travel, restarting in June, referred to psychiatrist, etc."
-                />
-              </div>
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={s.label}>Notes / Reason</label>
+                    <textarea
+                      style={{ ...s.input, width: "100%", boxSizing: "border-box", minHeight: 120, resize: "vertical", lineHeight: 1.65, marginTop: 4 }}
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Add context — e.g. patient paused sessions due to travel, restarting in June, referred to psychiatrist, etc."
+                    />
+                  </div>
 
-              <div style={{ display: "flex", gap: 10 }}>
-                <button type="submit" style={{ ...s.updateBtn, flex: 2, padding: "10px 0", fontSize: 13 }} disabled={updating}>
-                  {updating ? "Updating…" : "Update Status"}
-                </button>
-                <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, flex: 1, padding: "10px 0", fontSize: 13 }}>
-                  Cancel
-                </button>
-              </div>
-            </form>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button type="submit" style={{ ...s.updateBtn, flex: 2, padding: "10px 0", fontSize: 13 }} disabled={updating}>
+                      {updating ? "Updating…" : "Update Status"}
+                    </button>
+                    <button type="button" onClick={() => setShowCurrentStatus(false)} style={{ ...s.secondaryBtn, flex: 1, padding: "10px 0", fontSize: 13 }}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </>
       )}
