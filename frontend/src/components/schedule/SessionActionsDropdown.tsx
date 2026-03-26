@@ -61,7 +61,7 @@ export default function SessionActionsDropdown({
             style={{
               padding: "5px 7px", border: "1px solid #ddd5cb", borderRadius: 5,
               fontSize: 11, color: selected ? "#1a2535" : "#94a3b8",
-              background: "#fff", cursor: "pointer", outline: "none", maxWidth: 110,
+              background: "#fff", cursor: "pointer", outline: "none", width: 120,
             }}
           >
             <option value="">Action…</option>

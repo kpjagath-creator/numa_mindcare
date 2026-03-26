@@ -217,12 +217,14 @@ export default function SessionsTable({
                   <td style={s.td}>{fmtDuration(sess.durationMins)}</td>
                   <td style={s.td}>{fmtTime(sess.endTime)}</td>
                   <td style={s.td}>
-                    <span style={{ ...s.badge, ...(STATUS_BADGE[statusKey] ?? STATUS_BADGE.completed) }}>
-                      {STATUS_ICON[statusKey] ?? ""} {statusKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-                    </span>
-                    {sess.sessionType === "discovery" && (
-                      <span style={{ display: "block", marginTop: 3, fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px", width: "fit-content" }}>Discovery</span>
-                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      <span style={{ ...s.badge, ...(STATUS_BADGE[statusKey] ?? STATUS_BADGE.completed) }}>
+                        {STATUS_ICON[statusKey] ?? ""} {statusKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+                      </span>
+                      {sess.sessionType === "discovery" && (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px" }}>Discovery</span>
+                      )}
+                    </div>
                   </td>
                   <td style={s.td}>
                     {sess.charges !== null && sess.charges !== undefined

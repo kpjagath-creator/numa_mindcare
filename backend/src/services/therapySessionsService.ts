@@ -310,6 +310,7 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
         startTime: startDt,
         endTime: endDt,
         durationMins: input.duration_mins,
+        sessionType: original.sessionType,
         status: "upcoming",
         notes: input.notes ?? original.notes ?? null,
         rescheduledFromId: original.id,

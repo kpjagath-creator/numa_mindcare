@@ -10,6 +10,8 @@ import SearchableSelect from "../ui/SearchableSelect";
 interface Props {
   onClose: () => void;
   onCreated: () => void;
+  initialPatientId?: number;
+  initialSessionType?: "therapy" | "discovery";
 }
 
 interface FormValues {
@@ -39,8 +41,12 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default function AddSessionModal({ onClose, onCreated }: Props) {
-  const [form, setForm] = useState<FormValues>(EMPTY);
+export default function AddSessionModal({ onClose, onCreated, initialPatientId, initialSessionType }: Props) {
+  const [form, setForm] = useState<FormValues>({
+    ...EMPTY,
+    ...(initialSessionType ? { session_type: initialSessionType } : {}),
+    ...(initialPatientId ? { patient_id: String(initialPatientId) } : {}),
+  });
   const [patients, setPatients] = useState<Patient[]>([]);
   const [therapists, setTherapists] = useState<TeamMember[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -157,35 +163,37 @@ export default function AddSessionModal({ onClose, onCreated }: Props) {
         <form onSubmit={handleSubmit} noValidate>
           {error && <div style={s.errorBanner}>{error}</div>}
 
-          {/* Session type toggle */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-            <button
-              type="button"
-              onClick={() => { set("session_type", "therapy"); set("patient_id", ""); set("therapist_id", ""); }}
-              style={{
-                flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
-                borderColor: form.session_type === "therapy" ? "#2d6b5f" : "#ddd5cb",
-                background: form.session_type === "therapy" ? "#2d6b5f" : "#fff",
-                color: form.session_type === "therapy" ? "#fff" : "#64748b",
-                fontSize: 12, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Therapy Session
-            </button>
-            <button
-              type="button"
-              onClick={() => { set("session_type", "discovery"); set("patient_id", ""); set("therapist_id", ""); }}
-              style={{
-                flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
-                borderColor: form.session_type === "discovery" ? "#0369a1" : "#ddd5cb",
-                background: form.session_type === "discovery" ? "#0369a1" : "#fff",
-                color: form.session_type === "discovery" ? "#fff" : "#64748b",
-                fontSize: 12, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              Discovery Call
-            </button>
-          </div>
+          {/* Session type toggle — hidden if locked from parent */}
+          {!initialSessionType && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+              <button
+                type="button"
+                onClick={() => { set("session_type", "therapy"); set("patient_id", ""); set("therapist_id", ""); }}
+                style={{
+                  flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
+                  borderColor: form.session_type === "therapy" ? "#2d6b5f" : "#ddd5cb",
+                  background: form.session_type === "therapy" ? "#2d6b5f" : "#fff",
+                  color: form.session_type === "therapy" ? "#fff" : "#64748b",
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Therapy Session
+              </button>
+              <button
+                type="button"
+                onClick={() => { set("session_type", "discovery"); set("patient_id", ""); set("therapist_id", ""); }}
+                style={{
+                  flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
+                  borderColor: form.session_type === "discovery" ? "#0369a1" : "#ddd5cb",
+                  background: form.session_type === "discovery" ? "#0369a1" : "#fff",
+                  color: form.session_type === "discovery" ? "#fff" : "#64748b",
+                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                Discovery Call
+              </button>
+            </div>
+          )}
 
           {form.session_type === "discovery" && (
             <div style={{ background: "#e0f2fe", border: "1px solid #bae6fd", borderRadius: 8, padding: "8px 12px", marginBottom: 14, fontSize: 12, color: "#0369a1" }}>
@@ -194,15 +202,17 @@ export default function AddSessionModal({ onClose, onCreated }: Props) {
           )}
 
           <div style={s.formGrid}>
-            {/* Patient — searchable */}
-            <Field label="Patient *" error={fieldErrors.patient_id}>
-              <SearchableSelect
-                options={patientOptions}
-                value={form.patient_id}
-                onChange={(v) => set("patient_id", v)}
-                placeholder="Select patient…"
-              />
-            </Field>
+            {/* Patient — locked if pre-filled from patient profile */}
+            {!initialPatientId && (
+              <Field label="Patient *" error={fieldErrors.patient_id}>
+                <SearchableSelect
+                  options={patientOptions}
+                  value={form.patient_id}
+                  onChange={(v) => set("patient_id", v)}
+                  placeholder="Select patient…"
+                />
+              </Field>
+            )}
 
             {/* Therapist — searchable */}
             <Field label="Therapist *" error={fieldErrors.therapist_id}>

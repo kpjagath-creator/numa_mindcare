@@ -17,6 +17,7 @@ import { getNotesForSession } from "../../api/clinicalNotes";
 import type { ClinicalNote } from "../../api/clinicalNotes";
 import SessionsTable from "../../components/schedule/SessionsTable";
 import ClinicalNotesPanel from "../../components/schedule/ClinicalNotesPanel";
+import AddSessionModal from "../../components/schedule/AddSessionModal";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/Toast";
 import { useIsMobile } from "../../hooks/useIsMobile";
@@ -147,6 +148,9 @@ export default function PatientProfilePage() {
 
   // Clinical notes panel
   const [notesSession, setNotesSession] = useState<TherapySession | null>(null);
+
+  // Add session modal
+  const [showAddSession, setShowAddSession] = useState(false);
 
   // Therapist edit form
   const [selectedTherapistId, setSelectedTherapistId] = useState<string>("");
@@ -407,6 +411,19 @@ export default function PatientProfilePage() {
           )}
         </div>
 
+        {/* Schedule CTA — context-aware based on patient status */}
+        {(patient.currentStatus === "created" ||
+          patient.currentStatus === "discovery_completed" ||
+          patient.currentStatus === "started_therapy" ||
+          patient.currentStatus === "therapy_paused") && (
+          <button
+            style={{ width: "100%", padding: "11px 16px", borderRadius: 10, border: "none", background: patient.currentStatus === "created" ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
+            onClick={() => setShowAddSession(true)}
+          >
+            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" : "📅 Schedule Session"}
+          </button>
+        )}
+
         {/* Status action buttons */}
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <button
@@ -573,6 +590,15 @@ export default function PatientProfilePage() {
             onClose={() => setNotesSession(null)}
           />
         )}
+
+        {showAddSession && (
+          <AddSessionModal
+            initialPatientId={patient.id}
+            initialSessionType={patient.currentStatus === "created" ? "discovery" : "therapy"}
+            onClose={() => setShowAddSession(false)}
+            onCreated={() => { setShowAddSession(false); void refreshPatientAndSessions(); showToast("Session scheduled.", "success"); }}
+          />
+        )}
       </Layout>
     );
   }
@@ -686,7 +712,7 @@ export default function PatientProfilePage() {
       </div>
 
       {/* ── Status Action Buttons ── */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => setShowCurrentStatus(true)}>
           Change Status
         </button>
@@ -694,6 +720,21 @@ export default function PatientProfilePage() {
           View History
         </button>
       </div>
+
+      {/* ── Schedule CTA — context-aware based on patient status ── */}
+      {(patient.currentStatus === "created" ||
+        patient.currentStatus === "discovery_completed" ||
+        patient.currentStatus === "started_therapy" ||
+        patient.currentStatus === "therapy_paused") && (
+        <div style={{ marginBottom: 20 }}>
+          <button
+            style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: patient.currentStatus === "created" ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            onClick={() => setShowAddSession(true)}
+          >
+            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" : "📅 Schedule Session"}
+          </button>
+        </div>
+      )}
 
       {/* ── Therapy Sessions ── */}
       {sessions.length > 0 && (
@@ -830,6 +871,15 @@ export default function PatientProfilePage() {
           patientName={notesSession.patient.name}
           sessionDate={notesSession.startTime}
           onClose={() => setNotesSession(null)}
+        />
+      )}
+
+      {showAddSession && (
+        <AddSessionModal
+          initialPatientId={patient.id}
+          initialSessionType={patient.currentStatus === "created" ? "discovery" : "therapy"}
+          onClose={() => setShowAddSession(false)}
+          onCreated={() => { setShowAddSession(false); void refreshPatientAndSessions(); showToast("Session scheduled.", "success"); }}
         />
       )}
     </Layout>
