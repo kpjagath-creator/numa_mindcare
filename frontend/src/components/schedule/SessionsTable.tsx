@@ -204,9 +204,6 @@ export default function SessionsTable({
                         {sess.patient.name}
                       </Link>
                       <span style={s.sub}>{sess.patient.patientNumber}</span>
-                      {sess.sessionType === "discovery" && (
-                        <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px", marginLeft: 4 }}>Discovery</span>
-                      )}
                     </td>
                   )}
                   {showTherapist && (
@@ -260,7 +257,7 @@ export default function SessionsTable({
                     <td style={{ ...s.td, whiteSpace: "nowrap" }}>
                       <SessionActionsDropdown
                         session={sess}
-                        onComplete={onComplete ? (id) => { setCompleteId(id); setChargesInput(""); setChargesError(""); } : undefined}
+                        onComplete={onComplete ? (id) => { setCompleteId(id); setChargesInput(""); setChargesError(""); setDiscoveryNotes(""); setDiscoveryNotesError(""); } : undefined}
                         onReschedule={onReschedule ? (id) => { setRescheduleId(id); setRescheduleDate(""); setRescheduleTime(""); setRescheduleDuration("60"); setRescheduleNotes(""); setRescheduleError(""); } : undefined}
                         onNoShow={onNoShow ? (id) => { setNoShowId(id); setNoShowFeeInput(""); setNoShowError(""); } : undefined}
                         onCancel={onCancel ? (id) => { setCancelId(id); setCancelReason(""); setCancelError(""); } : undefined}

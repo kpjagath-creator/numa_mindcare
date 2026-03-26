@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx prisma:*)",
+      "Bash(timeout 8 npm run dev)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx tsc:*)",
+      "Bash(npm audit:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(node -e \":*)",
+      "Bash(timeout 30)",
+      "Bash(npm run:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr /I \"listening\")",
+      "Bash(findstr \"3000\\\\|5000\\\\|8000\")",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(findstr \":4000\")",
+      "Bash(curl -s http://localhost:4000/api/v1/health)",
+      "Bash(curl -s http://localhost:4000/api/v1/patients)",
+      "Bash(\"C:/Users/kpjag/OneDrive/Desktop/tool/numa-mindcare/.gitignore\":*)",
+      "Bash(\"C:/Users/kpjag/OneDrive/Desktop/tool/numa-mindcare/backend/railway.toml\":*)",
+      "WebFetch(domain:numa-mindcare-backend-production.up.railway.app)",
+      "WebFetch(domain:numa-mindcare.vercel.app)",
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git stash:*)",
+      "Bash(npx --prefix frontend tsc --noEmit)"
+    ]
+  }
+}

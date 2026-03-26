@@ -210,9 +210,6 @@ export default function ScheduleListPage() {
               >
                 {sess.patient.name}
               </button>
-              {sess.sessionType === "discovery" && (
-                <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 5px" }}>Discovery</span>
-              )}
             </div>
             <div className="mobile-card-subtitle">{sess.therapist.name}</div>
           </div>
@@ -268,7 +265,7 @@ export default function ScheduleListPage() {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {isUpcoming && (
                 <>
-                  <button style={btnStyle("#fff", "#2d6b5f")} onClick={() => { setShowCompleteInput(true); setShowCancelInput(false); setShowRescheduleForm(false); setShowNoShowInput(false); setShowPaymentInput(false); }}>
+                  <button style={btnStyle("#fff", "#2d6b5f")} onClick={() => { setShowCompleteInput(true); setShowCancelInput(false); setShowRescheduleForm(false); setShowNoShowInput(false); setShowPaymentInput(false); setCharges(""); setDiscoveryNotes(""); setDiscoveryNotesError(""); }}>
                     ✓ Complete
                   </button>
                   <button style={btnStyle("#991b1b", "#fee2e2")} onClick={() => { setShowCancelInput(true); setShowCompleteInput(false); setShowRescheduleForm(false); setShowNoShowInput(false); setShowPaymentInput(false); }}>
