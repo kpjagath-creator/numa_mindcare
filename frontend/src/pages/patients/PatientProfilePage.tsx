@@ -413,14 +413,17 @@ export default function PatientProfilePage() {
 
         {/* Schedule CTA — context-aware based on patient status */}
         {(patient.currentStatus === "created" ||
+          patient.currentStatus === "discovery_scheduled" ||
           patient.currentStatus === "discovery_completed" ||
           patient.currentStatus === "started_therapy" ||
           patient.currentStatus === "therapy_paused") && (
           <button
-            style={{ width: "100%", padding: "11px 16px", borderRadius: 10, border: "none", background: patient.currentStatus === "created" ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
+            style={{ width: "100%", padding: "11px 16px", borderRadius: 10, border: "none", background: (patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
             onClick={() => setShowAddSession(true)}
           >
-            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" : "📅 Schedule Session"}
+            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" :
+             patient.currentStatus === "discovery_scheduled" ? "📅 Reschedule Discovery Call" :
+             "📅 Schedule Session"}
           </button>
         )}
 
@@ -594,7 +597,7 @@ export default function PatientProfilePage() {
         {showAddSession && (
           <AddSessionModal
             initialPatientId={patient.id}
-            initialSessionType={patient.currentStatus === "created" ? "discovery" : "therapy"}
+            initialSessionType={(patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "discovery" : "therapy"}
             onClose={() => setShowAddSession(false)}
             onCreated={() => { setShowAddSession(false); void refreshPatientAndSessions(); showToast("Session scheduled.", "success"); }}
           />
@@ -723,15 +726,18 @@ export default function PatientProfilePage() {
 
       {/* ── Schedule CTA — context-aware based on patient status ── */}
       {(patient.currentStatus === "created" ||
+        patient.currentStatus === "discovery_scheduled" ||
         patient.currentStatus === "discovery_completed" ||
         patient.currentStatus === "started_therapy" ||
         patient.currentStatus === "therapy_paused") && (
         <div style={{ marginBottom: 20 }}>
           <button
-            style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: patient.currentStatus === "created" ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: (patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
             onClick={() => setShowAddSession(true)}
           >
-            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" : "📅 Schedule Session"}
+            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" :
+             patient.currentStatus === "discovery_scheduled" ? "📅 Reschedule Discovery Call" :
+             "📅 Schedule Session"}
           </button>
         </div>
       )}
@@ -877,7 +883,7 @@ export default function PatientProfilePage() {
       {showAddSession && (
         <AddSessionModal
           initialPatientId={patient.id}
-          initialSessionType={patient.currentStatus === "created" ? "discovery" : "therapy"}
+          initialSessionType={(patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "discovery" : "therapy"}
           onClose={() => setShowAddSession(false)}
           onCreated={() => { setShowAddSession(false); void refreshPatientAndSessions(); showToast("Session scheduled.", "success"); }}
         />

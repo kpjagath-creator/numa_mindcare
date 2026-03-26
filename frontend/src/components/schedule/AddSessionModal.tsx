@@ -145,9 +145,11 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
 
   const selectedTherapist = therapists.find((t) => String(t.id) === form.therapist_id);
 
+  // Patients still in the discovery phase (not yet started therapy)
+  const DISCOVERY_PHASE_STATUSES = ["created", "discovery_scheduled"];
   const filteredPatients = form.session_type === "discovery"
-    ? patients.filter((p) => p.currentStatus === "created")
-    : patients.filter((p) => p.currentStatus !== "created");
+    ? patients.filter((p) => DISCOVERY_PHASE_STATUSES.includes(p.currentStatus))
+    : patients.filter((p) => !DISCOVERY_PHASE_STATUSES.includes(p.currentStatus));
 
   const patientOptions = filteredPatients.map((p) => ({ value: String(p.id), label: `${p.patientNumber} — ${p.name}` }));
   const therapistOptions = therapists.map((t) => ({ value: String(t.id), label: `${t.name} (${t.employeeType})` }));
