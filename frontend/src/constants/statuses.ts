@@ -43,5 +43,5 @@ export const STATUS_TRANSITIONS: Record<PatientStatus, PatientStatus[]> = {
 export const STATUS_NEXT_ACTION_HINT: Partial<Record<PatientStatus, string>> = {
   created: "Schedule a discovery call to move this patient forward.",
   discovery_scheduled: "Complete the discovery session to advance to Discovery Completed.",
-  discovery_completed: "Schedule a therapy session to move to Started Therapy.",
+  discovery_completed: "Assign a therapist/psychiatrist via Edit Info, then schedule the first therapy session to move to Started Therapy.",
 };

@@ -411,6 +411,21 @@ export default function PatientProfilePage() {
           )}
         </div>
 
+        {/* Discovery Notes */}
+        {(() => {
+          const discoverySession = sessions.find((s) => s.sessionType === "discovery" && s.status === "completed" && s.notes);
+          if (!discoverySession) return null;
+          return (
+            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "12px 14px", marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Discovery Notes</span>
+                <span style={{ fontSize: 10, color: "#64748b" }}>by {discoverySession.therapist.name}</span>
+              </div>
+              <p style={{ margin: 0, fontSize: 12, color: "#1e3a5f", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{discoverySession.notes}</p>
+            </div>
+          );
+        })()}
+
         {/* Schedule CTA — context-aware based on patient status */}
         {(patient.currentStatus === "created" ||
           patient.currentStatus === "discovery_scheduled" ||
@@ -713,6 +728,21 @@ export default function PatientProfilePage() {
           </form>
         ))}
       </div>
+
+      {/* ── Discovery Notes ── */}
+      {(() => {
+        const discoverySession = sessions.find((s) => s.sessionType === "discovery" && s.status === "completed" && s.notes);
+        if (!discoverySession) return null;
+        return (
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: "16px 20px", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Discovery Notes</span>
+              <span style={{ fontSize: 10, color: "#64748b" }}>by {discoverySession.therapist.name} · {new Date(discoverySession.startTime).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+            </div>
+            <p style={{ margin: 0, fontSize: 12, color: "#1e3a5f", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{discoverySession.notes}</p>
+          </div>
+        );
+      })()}
 
       {/* ── Status Action Buttons ── */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
