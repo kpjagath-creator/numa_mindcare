@@ -1,5 +1,6 @@
 // Entry point for the Numa Mindcare Express application.
 // Configures middleware, mounts the /api/v1 router, and registers global error handling.
+// v2 — includes sessionType in all session API responses
 
 import express, { Request, Response } from "express";
 import cors from "cors";
