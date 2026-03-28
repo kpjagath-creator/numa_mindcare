@@ -275,12 +275,14 @@ export default function PatientProfilePage() {
   }
 
   async function refreshPatientAndSessions() {
-    const [p, r] = await Promise.all([
+    const [p, r, l] = await Promise.all([
       getPatient(patientId),
       listSessions({ patient_id: patientId, limit: 200 }),
+      getStatusLogs(patientId),
     ]);
     setPatient(p);
     setSessions(r.sessions);
+    setLogs(l);
     setNewStatus("");
   }
 
@@ -311,6 +313,17 @@ export default function PatientProfilePage() {
   if (!patient) {
     return <Layout title="Patient Profile"><p style={{ color: "#718096" }}><Spinner /></p></Layout>;
   }
+
+  // ── Therapist display logic ─────────────────────────────────────────────────
+  const DISCOVERY_PHASES = ["created", "discovery_scheduled", "discovery_completed"];
+  const discoverySessionTherapist = sessions.find((s) => s.sessionType === "discovery")?.therapist;
+  const isDiscoveryPhase = DISCOVERY_PHASES.includes(patient.currentStatus);
+  const displayTherapistName = isDiscoveryPhase && discoverySessionTherapist
+    ? discoverySessionTherapist.name
+    : patient.therapist?.name ?? null;
+  const displayTherapistFull = isDiscoveryPhase && discoverySessionTherapist
+    ? `${discoverySessionTherapist.name}${discoverySessionTherapist.employeeType ? ` (${discoverySessionTherapist.employeeType})` : ""}`
+    : patient.therapist ? `${patient.therapist.name} (${patient.therapist.employeeType})` : null;
 
   // ── Mobile render ──────────────────────────────────────────────────────────
   if (isMobile) {
@@ -350,7 +363,7 @@ export default function PatientProfilePage() {
             <InfoRow label="Email" value={patient.email} />
             <InfoRow label="Source" value={patient.source} />
             <InfoRow label="Referred By" value={patient.referredBy} />
-            <InfoRow label="Therapist" value={patient.therapist ? patient.therapist.name : null} />
+            <InfoRow label="Therapist" value={displayTherapistName} />
             <InfoRow label="Registered" value={formatDate(patient.createdAt)} />
           </div>
 
@@ -656,7 +669,7 @@ export default function PatientProfilePage() {
               <InfoRow label="Age" value={`${patient.age} yrs`} />
               <InfoRow label="Source" value={patient.source} />
               <InfoRow label="Referred By" value={patient.referredBy} />
-              <InfoRow label="Therapist" value={patient.therapist ? `${patient.therapist.name} (${patient.therapist.employeeType})` : null} />
+              <InfoRow label="Therapist" value={displayTherapistFull} />
               <InfoRow label="Registered On" value={formatDate(patient.createdAt)} />
             </div>
             {allPatientNotes.length > 0 && (

@@ -91,7 +91,9 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
         style={styles.close}
         aria-label="Close notification"
       >
-        \u00D7
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
       </button>
     </div>
   );
