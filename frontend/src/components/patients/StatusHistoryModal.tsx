@@ -18,7 +18,7 @@ export default function StatusHistoryModal({ open, logs, onClose }: Props) {
         overflowY: "auto", zIndex: 201, padding: 24, boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1a2535" }}>Status History</h2>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0F172A" }}>Status History</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>✕</button>
         </div>
         {logs.length === 0 ? (
@@ -42,14 +42,14 @@ export default function StatusHistoryModal({ open, logs, onClose }: Props) {
                       {new Date(log.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#2d6b5f", background: "#e4f2ee", padding: "2px 8px", borderRadius: 20 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#3D9E8E", background: "#e4f2ee", padding: "2px 8px", borderRadius: 20 }}>
                         {log.newStatus.replace(/_/g, " ")}
                       </span>
                     </td>
                     <td style={{ padding: "10px 14px", color: "#334155", fontStyle: log.notes ? "italic" : "normal" }}>
                       {log.notes ?? <span style={{ color: "#b8c4cc" }}>—</span>}
                     </td>
-                    <td style={{ padding: "10px 14px", color: "#1a2535", fontWeight: 500, whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "10px 14px", color: "#0F172A", fontWeight: 500, whiteSpace: "nowrap" }}>
                       {log.changedByName ?? <span style={{ color: "#b8c4cc" }}>—</span>}
                     </td>
                   </tr>

@@ -85,7 +85,7 @@ export default function ConfirmDialog({
             disabled={loading}
             style={{
               ...styles.confirmBtn,
-              background: isDanger ? "#dc2626" : "#2d6b5f",
+              background: isDanger ? "#DC2626" : "#3D9E8E",
             }}
           >
             {loading && <span className="spinner" style={{ width: 14, height: 14, marginRight: 6 }} />}
@@ -101,7 +101,8 @@ const styles: Record<string, React.CSSProperties> = {
   overlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.35)",
+    background: "rgba(15,23,42,0.5)",
+    backdropFilter: "blur(4px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -110,7 +111,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   modal: {
     background: "#fff",
-    borderRadius: 12,
+    borderRadius: 20,
     padding: "28px 28px 22px",
     maxWidth: 420,
     width: "90%",
@@ -121,7 +122,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: "0 0 8px",
     fontSize: 16,
     fontWeight: 700,
-    color: "#1a2535",
+    color: "#0F172A",
   },
   message: {
     margin: "0 0 24px",
@@ -139,9 +140,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 500,
     border: "1px solid #ddd5cb",
-    borderRadius: 6,
+    borderRadius: 8,
     background: "#fff",
-    color: "#1a2535",
+    color: "#0F172A",
     cursor: "pointer",
   },
   confirmBtn: {
@@ -149,7 +150,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 600,
     border: "none",
-    borderRadius: 6,
+    borderRadius: 8,
     color: "#fff",
     cursor: "pointer",
     display: "flex",

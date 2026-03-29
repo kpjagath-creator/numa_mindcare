@@ -16,7 +16,7 @@ export default function Layout({ children, title }: Props) {
       <Sidebar />
       <div style={s.main}>
         <TopBar title={title} onMenuClick={() => {}} />
-        <div style={{ ...s.content, paddingBottom: isMobile ? "80px" : "22px" }}>
+        <div style={{ ...s.content, paddingBottom: isMobile ? "80px" : "28px" }}>
           <div className="page-fade">{children}</div>
         </div>
       </div>
@@ -26,7 +26,7 @@ export default function Layout({ children, title }: Props) {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  shell:   { display: "flex", minHeight: "100vh", background: "#eee8e0", width: "100%" },
+  shell:   { display: "flex", minHeight: "100vh", background: "#F7F2EC", width: "100%" },
   main:    { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
-  content: { flex: 1, padding: "22px 26px", overflowY: "auto" },
+  content: { flex: 1, padding: "24px 28px", overflowY: "auto" },
 };

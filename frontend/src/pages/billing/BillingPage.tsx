@@ -35,11 +35,11 @@ function shortMonth(label: string): string {
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div style={card}>
-      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+      <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
         {label}
       </div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: "#1a2535", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 5 }}>{sub}</div>}
+      <div style={{ fontSize: 28, fontWeight: 800, color: "#16A34A", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 6 }}>{sub}</div>}
     </div>
   );
 }
@@ -63,8 +63,8 @@ function BarChart({ data }: { data: RevenueStats["monthlyRevenue"] }) {
                 title={`${shortMonth(d.month)}: ${fmtRupees(d.revenue)} (${d.sessionCount} sessions)`}
                 style={{
                   background: d.revenue > 0
-                    ? "linear-gradient(180deg, #4aa895 0%, #2d6b5f 100%)"
-                    : "#e2e8f0",
+                    ? "linear-gradient(180deg, #4BBCAC 0%, #3D9E8E 100%)"
+                    : "#E2E8F0",
                   borderRadius: "4px 4px 0 0",
                   height: `${Math.max(heightPct, d.revenue > 0 ? 8 : 2)}%`,
                   transition: "height 0.5s ease",
@@ -138,7 +138,7 @@ function AddChargeRow({
               onClick={handleSave}
               disabled={saving}
               style={{
-                padding: "3px 10px", background: "#2d6b5f", color: "#fff",
+                padding: "3px 10px", background: "#3D9E8E", color: "#fff",
                 border: "none", borderRadius: 5, fontSize: 11, cursor: "pointer",
               }}
             >
@@ -158,8 +158,8 @@ function AddChargeRow({
           <button
             onClick={() => setEditing(true)}
             style={{
-              padding: "3px 12px", background: "#fff7ed", color: "#c2410c",
-              border: "1px solid #fed7aa", borderRadius: 5, fontSize: 11,
+              padding: "3px 12px", background: "#EEF9F7", color: "#3D9E8E",
+              border: "1px solid #A7D8D0", borderRadius: 5, fontSize: 11,
               cursor: "pointer", fontWeight: 600,
             }}
           >
@@ -228,7 +228,7 @@ function AddChargeCard({
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{ padding: "6px 14px", background: "#2d6b5f", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+            style={{ padding: "6px 14px", background: "#3D9E8E", color: "#fff", border: "none", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
           >
             {saving ? "..." : "Save"}
           </button>
@@ -242,7 +242,7 @@ function AddChargeCard({
       ) : (
         <button
           onClick={() => setEditing(true)}
-          style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+          style={{ marginTop: 10, width: "100%", padding: "8px 0", background: "#EEF9F7", color: "#3D9E8E", border: "1px solid #A7D8D0", borderRadius: 6, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
         >
           + Add Charge
         </button>
@@ -310,19 +310,19 @@ export default function BillingPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Revenue</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2535" }}>{fmtRupees(stats.totalRevenue)}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>{fmtRupees(stats.totalRevenue)}</div>
             <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>completed</div>
           </div>
           <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Avg/Session</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#1a2535" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>
               {stats.averageChargePerSession > 0 ? fmtRupees(stats.averageChargePerSession) : "—"}
             </div>
             <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>{stats.totalCompletedSessions} sess.</div>
           </div>
           <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", boxShadow: "0 1px 4px rgba(0,0,0,0.07)" }}>
             <div style={{ fontSize: 9, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Outstanding</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: outstanding.length > 0 ? "#c2410c" : "#1a2535" }}>{outstanding.length}</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: outstanding.length > 0 ? "#DC2626" : "#0F172A" }}>{outstanding.length}</div>
             <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 3 }}>missing</div>
           </div>
         </div>
@@ -352,7 +352,7 @@ export default function BillingPage() {
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.sessionCount} sessions · {pct}%</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1A7A6E" }}>{fmtRupees(t.revenue)}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#16A34A" }}>{fmtRupees(t.revenue)}</div>
                         <div style={{ fontSize: 11, color: "#94A3B8" }}>
                           avg {t.sessionCount > 0 ? fmtRupees(Math.round(t.revenue / t.sessionCount)) : "—"}
                         </div>
@@ -361,7 +361,7 @@ export default function BillingPage() {
                     {/* Mini percentage bar */}
                     <div style={{ background: "#E2E8F0", borderRadius: 4, height: 5 }}>
                       <div style={{
-                        background: "linear-gradient(90deg, #1A7A6E, #34D399)",
+                        background: "linear-gradient(90deg, #3D9E8E, #34D399)",
                         borderRadius: 4, height: 5,
                         width: `${pct}%`,
                         transition: "width 0.5s ease",
@@ -489,44 +489,46 @@ export default function BillingPage() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const card: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 10,
-  padding: "16px 18px",
+  background: "#FFFFFF",
+  borderRadius: 16,
+  padding: "20px 22px",
   flex: "1 1 160px",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)",
+  border: "1px solid #E8EDF2",
   minWidth: 160,
 };
 
 const sectionCard: React.CSSProperties = {
-  background: "#ffffff",
-  borderRadius: 10,
-  padding: "16px 18px",
-  boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+  background: "#FFFFFF",
+  borderRadius: 16,
+  padding: "20px 22px",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)",
+  border: "1px solid #E8EDF2",
 };
 
 const sectionTitle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
-  color: "#1a2535",
+  color: "#94A3B8",
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  marginBottom: 10,
-  borderBottom: "1px solid #f1f5f9",
-  paddingBottom: 8,
+  letterSpacing: "0.08em",
+  marginBottom: 12,
+  borderBottom: "1px solid #F1F5F9",
+  paddingBottom: 10,
 };
 
 const th: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 600,
-  color: "#94a3b8",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#94A3B8",
   textAlign: "left",
   padding: "4px 8px",
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.08em",
 };
 
 const td: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   color: "#334155",
-  padding: "7px 8px",
+  padding: "9px 8px",
 };

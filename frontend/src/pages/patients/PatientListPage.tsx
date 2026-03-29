@@ -16,9 +16,8 @@ import { useToast } from "../../components/ui/Toast";
 
 const LIMIT = 20;
 
-// ── Avatar helpers ─────────────────────────────────────────────────────────
 function avatarColor(name: string): string {
-  const colors = ["#6366F1","#1A7A6E","#F59E0B","#EF4444","#8B5CF6","#EC4899","#10B981","#0EA5E9"];
+  const colors = ["#6366F1","#3D9E8E","#F59E0B","#DC2626","#8B5CF6","#EC4899","#16A34A","#0EA5E9"];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
@@ -67,26 +66,25 @@ export default function PatientListPage() {
     }
   }
 
-  // ── Mobile patient card with actions ───────────────────────────────────────
+  // ── Mobile patient card ────────────────────────────────────────────────────
   function MobilePatientCard({ p }: { p: Patient }) {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const color = avatarColor(p.name);
 
     return (
       <div className="mobile-card">
-        {/* Card info — tap to view profile */}
         <div
           style={{ cursor: "pointer", display: "flex", gap: 12, alignItems: "flex-start" }}
           onClick={() => navigate(`/patients/${p.id}`)}
         >
-          {/* Avatar circle */}
-          <div
-            className="avatar-circle"
-            style={{ background: color + "22", color, fontSize: 14, fontWeight: 700 }}
-          >
+          <div style={{
+            width: 40, height: 40, borderRadius: "50%",
+            background: color + "22", color,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14, fontWeight: 700, flexShrink: 0,
+          }}>
             {initials(p.name)}
           </div>
-          {/* Info */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
               <div className="mobile-card-title" style={{ flex: 1, marginRight: 8 }}>{p.name}</div>
@@ -102,16 +100,15 @@ export default function PatientListPage() {
           </div>
         </div>
 
-        {/* Action buttons */}
         <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #EEF2F7" }}>
           <button
-            style={{ flex: 2, padding: "8px 12px", borderRadius: 8, border: "none", background: "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 2, padding: "8px 12px", borderRadius: 8, border: "none", background: "#3D9E8E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => navigate(`/patients/${p.id}`)}
           >
             View Profile
           </button>
           <button
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#FEF2F2", color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowDeleteConfirm(true)}
           >
             Delete
@@ -123,6 +120,7 @@ export default function PatientListPage() {
           title="Delete Patient"
           message={`Are you sure you want to delete ${p.name}? This cannot be undone.`}
           confirmLabel="Delete"
+          variant="danger"
           onConfirm={async () => { await handleDelete(p.id); setShowDeleteConfirm(false); }}
           onCancel={() => setShowDeleteConfirm(false)}
         />
@@ -136,7 +134,7 @@ export default function PatientListPage() {
   if (isMobile) {
     return (
       <Layout title="Patients">
-        {/* Mobile search bar with icon */}
+        {/* Search bar with icon */}
         <div style={{ position: "relative", marginBottom: 12 }}>
           <svg
             style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
@@ -146,7 +144,7 @@ export default function PatientListPage() {
           </svg>
           <input
             className="mobile-search-bar"
-            style={{ paddingLeft: 36 }}
+            style={{ paddingLeft: 40 }}
             placeholder="Search name or mobile…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -177,7 +175,7 @@ export default function PatientListPage() {
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} style={{ height: 80, background: "#e2e8f0", borderRadius: 12, animation: "pulse 1.5s ease-in-out infinite" }} />
+              <div key={i} style={{ height: 90, borderRadius: 14 }} className="skeleton" />
             ))}
           </div>
         ) : patients.length === 0 ? (
@@ -195,7 +193,6 @@ export default function PatientListPage() {
                 <MobilePatientCard key={p.id} p={p} />
               ))}
             </div>
-
             {totalPages > 1 && (
               <div style={s.pager}>
                 <button style={s.pageBtn} disabled={page === 1} onClick={() => setPage((p) => p - 1)}>← Prev</button>
@@ -206,14 +203,7 @@ export default function PatientListPage() {
           </>
         )}
 
-        {/* FAB for new patient */}
-        <button
-          className="fab"
-          onClick={() => navigate("/patients/new")}
-          title="Register new patient"
-        >
-          +
-        </button>
+        <button className="fab" onClick={() => navigate("/patients/new")} title="Register new patient">+</button>
       </Layout>
     );
   }
@@ -221,15 +211,24 @@ export default function PatientListPage() {
   // ── Desktop render ─────────────────────────────────────────────────────────
   return (
     <Layout title="Patients">
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div style={s.toolbar}>
         <div style={s.filters}>
-          <input
-            style={s.input}
-            placeholder="Search name or mobile…"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          />
+          {/* Search with icon */}
+          <div style={{ position: "relative" }}>
+            <svg
+              style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              style={s.searchInput}
+              placeholder="Search name or mobile…"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
+          </div>
           <select
             style={s.select}
             value={statusFilter}
@@ -278,13 +277,13 @@ export default function PatientListPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  toolbar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, gap: 12, flexWrap: "wrap" },
-  filters: { display: "flex", gap: 8, flexWrap: "wrap" },
-  input: { padding: "7px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, width: 210, color: "#1a2535", outline: "none", background: "#fff" },
-  select: { padding: "7px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fff", cursor: "pointer" },
-  primaryBtn: { padding: "7px 16px", background: "#2d6b5f", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  error: { color: "#b91c1c", background: "#fee2e2", padding: "9px 14px", borderRadius: 6, marginBottom: 14, fontSize: 12 },
-  muted: { color: "#8a96a3", fontSize: 12 },
-  pager: { display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 20 },
-  pageBtn: { padding: "5px 13px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12, color: "#1a2535" },
+  toolbar:     { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, gap: 12, flexWrap: "wrap" },
+  filters:     { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
+  searchInput: { paddingLeft: 34, paddingRight: 12, height: 40, border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 13, color: "#0F172A", outline: "none", background: "#fff", width: 220 },
+  select:      { height: 40, padding: "0 12px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 13, color: "#0F172A", background: "#fff", cursor: "pointer" },
+  primaryBtn:  { height: 40, padding: "0 20px", background: "#3D9E8E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const },
+  error:       { color: "#DC2626", background: "#FEE2E2", padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, border: "1px solid #FECACA" },
+  muted:       { color: "#94A3B8", fontSize: 13 },
+  pager:       { display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 20 },
+  pageBtn:     { padding: "6px 16px", border: "1.5px solid #CBD5E1", borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 13, color: "#0F172A" },
 };

@@ -42,7 +42,7 @@ export default function SessionActionsDropdown({
         <button
           onClick={() => onNotes(session)}
           style={{
-            padding: "5px 9px", background: "#f0faf8", color: "#2d6b5f",
+            padding: "5px 9px", background: "#f0faf8", color: "#3D9E8E",
             border: "1px solid #c5e8e2", borderRadius: 5, fontSize: 11,
             fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
           }}
@@ -60,7 +60,7 @@ export default function SessionActionsDropdown({
             onChange={(e) => setSelected(e.target.value as Action)}
             style={{
               padding: "5px 7px", border: "1px solid #ddd5cb", borderRadius: 5,
-              fontSize: 11, color: selected ? "#1a2535" : "#94a3b8",
+              fontSize: 11, color: selected ? "#0F172A" : "#94a3b8",
               background: "#fff", cursor: "pointer", outline: "none", width: 120,
             }}
           >
@@ -77,7 +77,7 @@ export default function SessionActionsDropdown({
             disabled={!selected}
             style={{
               padding: "5px 10px",
-              background: selected ? "#2d6b5f" : "#eee8e0",
+              background: selected ? "#3D9E8E" : "#eee8e0",
               color: selected ? "#fff" : "#b8c4cc",
               border: "none", borderRadius: 5, fontSize: 11, fontWeight: 700,
               cursor: selected ? "pointer" : "not-allowed", whiteSpace: "nowrap",

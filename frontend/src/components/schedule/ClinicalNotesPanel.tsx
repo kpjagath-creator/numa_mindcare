@@ -113,7 +113,7 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #ede7df", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#1a2535" }}>Session Note</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Session Note</div>
               <div style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>
                 {patientName} · {new Date(sessionDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
               </div>
@@ -146,7 +146,7 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
                 autoFocus
                 style={{
                   width: "100%", padding: "12px 14px", border: "1px solid #ddd5cb", borderRadius: 8,
-                  fontSize: 13, color: "#1a2535", resize: "vertical", fontFamily: "inherit",
+                  fontSize: 13, color: "#0F172A", resize: "vertical", fontFamily: "inherit",
                   background: "#fdfbf9", boxSizing: "border-box", lineHeight: 1.7, outline: "none",
                   minHeight: 200,
                 }}
@@ -162,7 +162,7 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
                     placeholder="Your name"
                     style={{
                       width: "100%", padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6,
-                      fontSize: 12, color: "#1a2535", background: "#fdfbf9", boxSizing: "border-box", outline: "none",
+                      fontSize: 12, color: "#0F172A", background: "#fdfbf9", boxSizing: "border-box", outline: "none",
                     }}
                   />
                 </div>
@@ -175,7 +175,7 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
                   onClick={handleSave}
                   disabled={saving}
                   style={{
-                    flex: 1, padding: "9px 0", background: "#2d6b5f", color: "#fff",
+                    flex: 1, padding: "9px 0", background: "#3D9E8E", color: "#fff",
                     border: "none", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer",
                   }}
                 >
@@ -200,7 +200,7 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
                 <button
                   onClick={startEdit}
                   style={{
-                    padding: "5px 14px", background: "#f0faf8", color: "#2d6b5f",
+                    padding: "5px 14px", background: "#f0faf8", color: "#3D9E8E",
                     border: "1px solid #c5e8e2", borderRadius: 5, fontSize: 11, fontWeight: 600, cursor: "pointer",
                   }}
                 >
@@ -211,13 +211,13 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
                 background: "#fdfbf9", border: "1px solid #ede7df", borderRadius: 10,
                 padding: "16px 18px",
               }}>
-                <p style={{ margin: 0, fontSize: 13, color: "#1a2535", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+                <p style={{ margin: 0, fontSize: 13, color: "#0F172A", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
                   {note.content}
                 </p>
               </div>
               <div style={{ marginTop: 10, fontSize: 10, color: "#94a3b8" }}>
                 Written by <strong style={{ color: "#64748b" }}>{note.createdByName}</strong> · {fmtDT(note.createdAt)}
-                {note.updatedAt !== note.createdAt && <span style={{ marginLeft: 6, color: "#2d6b5f", fontStyle: "italic" }}>edited {fmtDT(note.updatedAt)}</span>}
+                {note.updatedAt !== note.createdAt && <span style={{ marginLeft: 6, color: "#3D9E8E", fontStyle: "italic" }}>edited {fmtDT(note.updatedAt)}</span>}
               </div>
             </div>
           ) : null}

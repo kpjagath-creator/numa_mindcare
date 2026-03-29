@@ -172,11 +172,12 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
                 type="button"
                 onClick={() => { set("session_type", "therapy"); set("patient_id", ""); set("therapist_id", ""); }}
                 style={{
-                  flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
-                  borderColor: form.session_type === "therapy" ? "#2d6b5f" : "#ddd5cb",
-                  background: form.session_type === "therapy" ? "#2d6b5f" : "#fff",
-                  color: form.session_type === "therapy" ? "#fff" : "#64748b",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  flex: 1, height: 44, borderRadius: 10, border: "1.5px solid",
+                  borderColor: form.session_type === "therapy" ? "#3D9E8E" : "#CBD5E1",
+                  background: form.session_type === "therapy" ? "#3D9E8E" : "#fff",
+                  color: form.session_type === "therapy" ? "#fff" : "#475569",
+                  fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  transition: "background 0.15s ease, color 0.15s ease",
                 }}
               >
                 Therapy Session
@@ -185,11 +186,12 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
                 type="button"
                 onClick={() => { set("session_type", "discovery"); set("patient_id", ""); set("therapist_id", ""); }}
                 style={{
-                  flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid",
-                  borderColor: form.session_type === "discovery" ? "#0369a1" : "#ddd5cb",
-                  background: form.session_type === "discovery" ? "#0369a1" : "#fff",
-                  color: form.session_type === "discovery" ? "#fff" : "#64748b",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  flex: 1, height: 44, borderRadius: 10, border: "1.5px solid",
+                  borderColor: form.session_type === "discovery" ? "#7C3AED" : "#CBD5E1",
+                  background: form.session_type === "discovery" ? "#7C3AED" : "#fff",
+                  color: form.session_type === "discovery" ? "#fff" : "#475569",
+                  fontSize: 14, fontWeight: 600, cursor: "pointer",
+                  transition: "background 0.15s ease, color 0.15s ease",
                 }}
               >
                 Discovery Call
@@ -286,7 +288,7 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
           {showTherapistSchedule && (
             <div style={s.scheduleBox}>
               <div style={s.scheduleHeader}>
-                <strong style={{ color: "#1a2535", fontSize: 12 }}>
+                <strong style={{ color: "#0F172A", fontSize: 12 }}>
                   {selectedTherapist?.name}'s sessions
                   {form.session_date ? ` on ${new Date(form.session_date + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}` : ""}
                 </strong>
@@ -349,31 +351,36 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 }
 
 const overlay: React.CSSProperties = {
-  position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000,
+  position: "fixed", inset: 0,
+  background: "rgba(15, 23, 42, 0.45)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
+  zIndex: 1000,
   display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
 };
 const modal: React.CSSProperties = {
-  background: "#fff", borderRadius: 14, width: "100%", maxWidth: 640,
-  maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
-  padding: 28,
+  background: "#fff", borderRadius: 20, width: "100%", maxWidth: 580,
+  maxHeight: "90vh", overflowY: "auto",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+  padding: 32,
 };
 const s: Record<string, React.CSSProperties> = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 },
-  title: { margin: 0, fontSize: 15, fontWeight: 700, color: "#1a2535" },
-  closeBtn: { background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#8a96a3", lineHeight: 1 },
-  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 18 },
-  input: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fdfbf9", width: "100%", boxSizing: "border-box" as const },
-  viewBtn: { padding: "8px 11px", border: "1px solid #2d6b5f", borderRadius: 6, background: "transparent", color: "#2d6b5f", fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", fontWeight: 500, flexShrink: 0 },
-  durationChip: { padding: "4px 10px", border: "1px solid #ddd5cb", borderRadius: 20, fontSize: 11, cursor: "pointer", background: "#fff", color: "#64748b", whiteSpace: "nowrap" as const },
-  durationChipActive: { background: "#2d6b5f", color: "#fff", borderColor: "#2d6b5f" },
-  errorBanner: { background: "#fee2e2", color: "#b91c1c", padding: "9px 13px", borderRadius: 6, marginBottom: 14, fontSize: 12 },
-  scheduleBox: { background: "#f7f2ec", border: "1px solid #ddd5cb", borderRadius: 8, padding: 12, marginBottom: 18 },
-  scheduleHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  collapseBtn: { background: "none", border: "none", fontSize: 11, color: "#8a96a3", cursor: "pointer", padding: 0 },
-  miniTable: { width: "100%", borderCollapse: "collapse", fontSize: 12 },
-  miniTh: { padding: "4px 8px", textAlign: "left", color: "#8a96a3", fontWeight: 700, fontSize: 10, borderBottom: "1px solid #ede7df", textTransform: "uppercase", letterSpacing: "0.06em" },
-  miniTd: { padding: "6px 8px", color: "#1a2535", borderBottom: "1px solid #f5f0ea", fontSize: 12 },
-  actions: { display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 },
-  cancelBtn: { padding: "8px 18px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#64748b" },
-  submitBtn: { padding: "8px 20px", border: "none", borderRadius: 6, background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  header:           { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+  title:            { margin: 0, fontSize: 20, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" },
+  closeBtn:         { width: 32, height: 32, borderRadius: "50%", background: "#F1F5F9", border: "none", fontSize: 14, cursor: "pointer", color: "#475569", display: "flex", alignItems: "center", justifyContent: "center" },
+  formGrid:         { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 },
+  input:            { height: 44, padding: "0 12px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 14, color: "#0F172A", background: "#FDFBF8", width: "100%", boxSizing: "border-box" as const },
+  viewBtn:          { height: 44, padding: "0 14px", border: "1.5px solid #3D9E8E", borderRadius: 8, background: "transparent", color: "#3D9E8E", fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" as const, fontWeight: 600, flexShrink: 0 },
+  durationChip:     { height: 36, padding: "0 14px", border: "1.5px solid #CBD5E1", borderRadius: 20, fontSize: 13, cursor: "pointer", background: "#fff", color: "#475569", whiteSpace: "nowrap" as const, display: "inline-flex", alignItems: "center" },
+  durationChipActive: { background: "#3D9E8E", color: "#fff", borderColor: "#3D9E8E" },
+  errorBanner:      { background: "#FEE2E2", color: "#DC2626", padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13, border: "1px solid #FECACA" },
+  scheduleBox:      { background: "#F7F2EC", border: "1px solid #E8EDF2", borderRadius: 10, padding: 14, marginBottom: 20 },
+  scheduleHeader:   { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  collapseBtn:      { background: "none", border: "none", fontSize: 12, color: "#94A3B8", cursor: "pointer", padding: 0 },
+  miniTable:        { width: "100%", borderCollapse: "collapse", fontSize: 12 },
+  miniTh:           { padding: "4px 8px", textAlign: "left", color: "#94A3B8", fontWeight: 700, fontSize: 11, borderBottom: "1px solid #E8EDF2", textTransform: "uppercase", letterSpacing: "0.08em" },
+  miniTd:           { padding: "7px 8px", color: "#0F172A", borderBottom: "1px solid #F1F5F9", fontSize: 12 },
+  actions:          { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 },
+  cancelBtn:        { height: 40, padding: "0 20px", border: "1.5px solid #CBD5E1", borderRadius: 8, background: "#fff", fontSize: 14, cursor: "pointer", color: "#475569", fontWeight: 500 },
+  submitBtn:        { height: 40, padding: "0 24px", border: "none", borderRadius: 8, background: "#3D9E8E", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" },
 };

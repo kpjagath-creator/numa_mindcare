@@ -104,7 +104,7 @@ export default function TeamMemberPatientsPage() {
                   onClick={() => navigate(`/patients/${p.id}`)}
                 >
                   <td style={s.td}><span style={s.patientMono}>{p.patientNumber}</span></td>
-                  <td style={{ ...s.td, fontWeight: 500, color: "#1a2535" }}>{p.name}</td>
+                  <td style={{ ...s.td, fontWeight: 500, color: "#0F172A" }}>{p.name}</td>
                   <td style={s.td}>{p.mobile}</td>
                   <td style={s.td}>{p.age} yrs</td>
                   <td style={s.td}>{p.source ?? <span style={{ color: "#a0aec0" }}>—</span>}</td>
@@ -156,8 +156,8 @@ export default function TeamMemberPatientsPage() {
 const s: Record<string, React.CSSProperties> = {
   backBtn: { background: "none", border: "none", color: "#8a96a3", fontSize: 12, cursor: "pointer", padding: 0, marginBottom: 18 },
   memberCard: { background: "#fff", borderRadius: 10, padding: "14px 18px", marginBottom: 20, border: "1px solid #ddd5cb", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)" },
-  mono: { fontFamily: "monospace", fontSize: 12, color: "#2d6b5f", fontWeight: 700, marginRight: 10 },
-  name: { fontSize: 13, fontWeight: 600, color: "#1a2535" },
+  mono: { fontFamily: "monospace", fontSize: 12, color: "#3D9E8E", fontWeight: 700, marginRight: 10 },
+  name: { fontSize: 13, fontWeight: 600, color: "#0F172A" },
   type: { fontSize: 11, color: "#8a96a3", background: "#f5f0ea", padding: "3px 10px", borderRadius: 10 },
   muted: { color: "#8a96a3", fontSize: 12 },
   table: { width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)" },
@@ -165,7 +165,7 @@ const s: Record<string, React.CSSProperties> = {
   th: { padding: "9px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#8a96a3", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "1px solid #ede7df" },
   row: { borderBottom: "1px solid #f5f0ea" },
   td: { padding: "10px 14px", fontSize: 12, color: "#3d4f60" },
-  patientMono: { fontFamily: "monospace", fontSize: 12, color: "#2d6b5f", fontWeight: 700 },
-  sectionHeading: { margin: "24px 0 10px", fontSize: 13, fontWeight: 700, color: "#1a2535" },
+  patientMono: { fontFamily: "monospace", fontSize: 12, color: "#3D9E8E", fontWeight: 700 },
+  sectionHeading: { margin: "24px 0 10px", fontSize: 13, fontWeight: 700, color: "#0F172A" },
   sectionLabel: { margin: "0 0 8px", fontSize: 10, fontWeight: 700, color: "#8a96a3", textTransform: "uppercase" as const, letterSpacing: "0.07em" },
 };

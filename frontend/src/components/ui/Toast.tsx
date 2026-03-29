@@ -19,7 +19,7 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const ICON: Record<ToastType, string> = { success: "\u2713", error: "\u2715", warning: "\u26A0" };
-const COLOR: Record<ToastType, string> = { success: "#2d6b5f", error: "#dc2626", warning: "#d97706" };
+const COLOR: Record<ToastType, string> = { success: "#3D9E8E", error: "#DC2626", warning: "#D97706" };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -123,11 +123,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     padding: "12px 16px",
     background: "#fff",
-    borderRadius: 8,
+    borderRadius: 12,
     borderLeft: "4px solid",
     boxShadow: "0 4px 20px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.06)",
-    minWidth: 280,
-    maxWidth: 400,
+    minWidth: 340,
+    maxWidth: 420,
     transition: "opacity 0.3s ease, transform 0.3s ease",
   },
   icon: {
@@ -139,7 +139,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   message: {
     fontSize: 13,
-    color: "#1a2535",
+    color: "#0F172A",
     flex: 1,
     lineHeight: 1.4,
   },

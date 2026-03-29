@@ -127,12 +127,12 @@ function Field({ label, error, children }: { label: string; error?: string; chil
 
 const s: Record<string, React.CSSProperties> = {
   card: { background: "#fff", borderRadius: 12, padding: 28, maxWidth: 480, boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)", border: "1px solid #ddd5cb" },
-  heading: { marginTop: 0, marginBottom: 22, fontSize: 14, fontWeight: 700, color: "#1a2535" },
+  heading: { marginTop: 0, marginBottom: 22, fontSize: 14, fontWeight: 700, color: "#0F172A" },
   apiError: { color: "#b91c1c", background: "#fee2e2", padding: "9px 13px", borderRadius: 6, marginBottom: 18, fontSize: 12 },
   stack: { display: "flex", flexDirection: "column", gap: 18, marginBottom: 24 },
-  input: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", outline: "none", background: "#fdfbf9" },
-  select: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fdfbf9", cursor: "pointer" },
+  input: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#0F172A", outline: "none", background: "#fdfbf9" },
+  select: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#0F172A", background: "#fdfbf9", cursor: "pointer" },
   actions: { display: "flex", gap: 10, justifyContent: "flex-end" },
   cancelBtn: { padding: "8px 18px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#64748b" },
-  submitBtn: { padding: "8px 20px", border: "none", borderRadius: 6, background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  submitBtn: { padding: "8px 20px", border: "none", borderRadius: 6, background: "#3D9E8E", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
 };

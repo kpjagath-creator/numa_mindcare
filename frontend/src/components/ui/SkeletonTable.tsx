@@ -7,7 +7,7 @@ interface Props {
 
 export default function SkeletonTable({ columns = 6, rows = 5 }: Props) {
   return (
-    <div style={{ background: "#fff", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)" }}>
+    <div style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)", border: "1px solid #E8EDF2" }}>
       <style>{`
         @keyframes shimmer {
           0% { background-position: -600px 0; }

@@ -32,7 +32,7 @@ function getAdminName(): string {
 }
 
 function avatarColor(name: string): string {
-  const colors = ["#6366F1","#1A7A6E","#F59E0B","#EF4444","#8B5CF6","#EC4899","#10B981","#0EA5E9"];
+  const colors = ["#6366F1","#3D9E8E","#F59E0B","#EF4444","#8B5CF6","#EC4899","#10B981","#0EA5E9"];
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return colors[Math.abs(hash) % colors.length];
@@ -73,7 +73,7 @@ function CollapsibleCard({
   }
 
   return (
-    <div style={{ background: "#fff", borderRadius: 12, marginBottom: 12, boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)", border: "1px solid #ddd5cb", overflow: "hidden" }}>
+    <div style={{ background: "#fff", borderRadius: 16, marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)", border: "1px solid #E8EDF2", overflow: "hidden" }}>
       <button
         onClick={toggle}
         style={{
@@ -82,7 +82,7 @@ function CollapsibleCard({
           textAlign: "left",
         }}
       >
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2535" }}>{title}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{title}</span>
         <span style={{ fontSize: 14, color: "#94a3b8", transition: "transform 0.2s ease", transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}>
           ›
         </span>
@@ -98,9 +98,9 @@ function CollapsibleCard({
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: "#b8c4cc", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</span>
-      <span style={{ fontSize: 12, color: "#1a2535" }}>{value ?? <span style={{ color: "#b8c4cc" }}>—</span>}</span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</span>
+      <span style={{ fontSize: 13, color: "#0F172A" }}>{value ?? <span style={{ color: "#CBD5E1" }}>—</span>}</span>
     </div>
   );
 }
@@ -446,25 +446,25 @@ export default function PatientProfilePage() {
           patient.currentStatus === "started_therapy" ||
           patient.currentStatus === "therapy_paused") && (
           <button
-            style={{ width: "100%", padding: "11px 16px", borderRadius: 10, border: "none", background: (patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
+            style={{ width: "100%", padding: "11px 16px", borderRadius: 10, border: "none", background: (patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "#7C3AED" : "#3D9E8E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", marginBottom: 10 }}
             onClick={() => setShowAddSession(true)}
           >
-            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" :
-             patient.currentStatus === "discovery_scheduled" ? "📅 Reschedule Discovery Call" :
-             "📅 Schedule Session"}
+            {patient.currentStatus === "created" ? "Schedule Discovery Call" :
+             patient.currentStatus === "discovery_scheduled" ? "Reschedule Discovery Call" :
+             "Schedule Session"}
           </button>
         )}
 
         {/* Status action buttons */}
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <button
-            style={{ flex: 1, padding: "10px 16px", borderRadius: 10, border: "none", background: "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            style={{ flex: 1, padding: "10px 16px", borderRadius: 10, border: "none", background: "#3D9E8E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowCurrentStatus(true)}
           >
             Change Status
           </button>
           <button
-            style={{ flex: 1, padding: "10px 16px", borderRadius: 10, border: "2px solid #1A7A6E", background: "#fff", color: "#1A7A6E", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            style={{ flex: 1, padding: "10px 16px", borderRadius: 10, border: "1.5px solid #3D9E8E", background: "#fff", color: "#3D9E8E", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowStatusHistory(true)}
           >
             View History
@@ -479,7 +479,7 @@ export default function PatientProfilePage() {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {allPatientNotes.slice(0, 3).map((note) => (
-                <div key={note.id} style={{ fontSize: 12, color: "#334155", background: "#fdfbf9", padding: "8px 10px", borderRadius: 6, borderLeft: "2px solid #2d6b5f" }}>
+                <div key={note.id} style={{ fontSize: 12, color: "#334155", background: "#FDFBF8", padding: "8px 10px", borderRadius: 6, borderLeft: "2px solid #3D9E8E" }}>
                   <p style={{ margin: 0, marginBottom: 4 }}>{note.content.length > 100 ? note.content.substring(0, 100) + "..." : note.content}</p>
                   <div style={{ fontSize: 10, color: "#94a3b8" }}>
                     {note.createdByName} · {new Date(note.createdAt).toLocaleDateString("en-IN")}
@@ -487,7 +487,7 @@ export default function PatientProfilePage() {
                 </div>
               ))}
               {allPatientNotes.length > 3 && (
-                <div style={{ fontSize: 11, color: "#2d6b5f", fontWeight: 600 }}>+{allPatientNotes.length - 3} more notes</div>
+                <div style={{ fontSize: 11, color: "#3D9E8E", fontWeight: 600 }}>+{allPatientNotes.length - 3} more notes</div>
               )}
             </div>
           </div>
@@ -523,7 +523,7 @@ export default function PatientProfilePage() {
               maxHeight: "90vh", overflowY: "auto",
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1a2535" }}>Update Status</h2>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0F172A" }}>Update Status</h2>
                 <button onClick={() => setShowCurrentStatus(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8" }}>✕</button>
               </div>
               {(() => {
@@ -636,7 +636,7 @@ export default function PatientProfilePage() {
 
   // ── Desktop render ─────────────────────────────────────────────────────────
   return (
-    <Layout title={`Patient ${patient.patientNumber}`}>
+    <Layout title={patient.name}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <Breadcrumb crumbs={[
           { label: "Dashboard", to: "/" },
@@ -650,7 +650,7 @@ export default function PatientProfilePage() {
       <div style={s.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: infoOpen ? 18 : 0 }}>
           <button onClick={() => setInfoOpen((o) => !o)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, padding: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#1a2535" }}>Patient Information</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Patient Information</span>
             <span style={{ fontSize: 14, color: "#94a3b8", transition: "transform 0.2s", transform: infoOpen ? "rotate(0deg)" : "rotate(-90deg)" }}>›</span>
           </button>
           {!editingInfo
@@ -661,7 +661,7 @@ export default function PatientProfilePage() {
         {infoOpen && (!editingInfo ? (
           <div>
             <div style={s.infoGrid}>
-              <InfoRow label="Patient #" value={<span style={{ fontFamily: "monospace", color: "#2d6b5f", fontWeight: 700 }}>{patient.patientNumber}</span>} />
+              <InfoRow label="Patient #" value={<span style={{ fontFamily: "monospace", color: "#3D9E8E", fontWeight: 700 }}>{patient.patientNumber}</span>} />
               <InfoRow label="Current Status" value={<PatientStatusBadge status={patient.currentStatus} />} />
               <InfoRow label="Full Name" value={patient.name} />
               <InfoRow label="Mobile" value={patient.mobile} />
@@ -679,7 +679,7 @@ export default function PatientProfilePage() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {allPatientNotes.slice(0, 3).map((note) => (
-                    <div key={note.id} style={{ fontSize: 11, color: "#334155", background: "#fdfbf9", padding: 8, borderRadius: 6, borderLeft: "2px solid #2d6b5f" }}>
+                    <div key={note.id} style={{ fontSize: 11, color: "#334155", background: "#fdfbf9", padding: 8, borderRadius: 6, borderLeft: "2px solid #3D9E8E" }}>
                       <p style={{ margin: 0, marginBottom: 4, fontWeight: 500 }}>{note.content.length > 80 ? note.content.substring(0, 80) + "..." : note.content}</p>
                       <div style={{ fontSize: 10, color: "#94a3b8" }}>
                         {note.createdByName} · {new Date(note.createdAt).toLocaleDateString("en-IN")}
@@ -687,7 +687,7 @@ export default function PatientProfilePage() {
                     </div>
                   ))}
                   {allPatientNotes.length > 3 && (
-                    <div style={{ fontSize: 10, color: "#2d6b5f", fontWeight: 600 }}>
+                    <div style={{ fontSize: 10, color: "#3D9E8E", fontWeight: 600 }}>
                       +{allPatientNotes.length - 3} more notes
                     </div>
                   )}
@@ -775,12 +775,12 @@ export default function PatientProfilePage() {
         patient.currentStatus === "therapy_paused") && (
         <div style={{ marginBottom: 20 }}>
           <button
-            style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: (patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "#0369a1" : "#1A7A6E", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            style={{ padding: "9px 20px", borderRadius: 8, border: "none", background: (patient.currentStatus === "created" || patient.currentStatus === "discovery_scheduled") ? "#7C3AED" : "#3D9E8E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowAddSession(true)}
           >
-            {patient.currentStatus === "created" ? "📅 Schedule Discovery Call" :
-             patient.currentStatus === "discovery_scheduled" ? "📅 Reschedule Discovery Call" :
-             "📅 Schedule Session"}
+            {patient.currentStatus === "created" ? "Schedule Discovery Call" :
+             patient.currentStatus === "discovery_scheduled" ? "Reschedule Discovery Call" :
+             "Schedule Session"}
           </button>
         </div>
       )}
@@ -815,9 +815,9 @@ export default function PatientProfilePage() {
             {/* Modal header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#1a2535" }}>Update Patient Status</h2>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0F172A" }}>Update Patient Status</h2>
                 <p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>
-                  Current: <strong style={{ color: "#2d6b5f" }}><PatientStatusBadge status={patient.currentStatus} /></strong>
+                  Current: <strong style={{ color: "#3D9E8E" }}><PatientStatusBadge status={patient.currentStatus} /></strong>
                 </p>
               </div>
               <button onClick={() => setShowCurrentStatus(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#94a3b8", padding: "2px 6px" }}>✕</button>
@@ -936,19 +936,19 @@ export default function PatientProfilePage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  backBtn: { background: "none", border: "none", color: "#8a96a3", fontSize: 12, cursor: "pointer", padding: 0 },
-  editBtn: { padding: "4px 12px", border: "1px solid #ddd5cb", borderRadius: 5, background: "#fff", fontSize: 11, cursor: "pointer", color: "#64748b", fontWeight: 500 },
-  dangerBtn: { padding: "5px 14px", border: "1px solid #e53e3e", borderRadius: 6, background: "transparent", color: "#e53e3e", fontSize: 11, cursor: "pointer", fontWeight: 500 },
-  card: { background: "#fff", borderRadius: 12, padding: 24, marginBottom: 12, boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)", border: "1px solid #ddd5cb" },
-  cardTitle: { margin: "0 0 18px", fontSize: 13, fontWeight: 700, color: "#1a2535" },
-  infoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 },
-  fieldCol: { display: "flex", flexDirection: "column", gap: 3 },
-  label: { fontSize: 10, fontWeight: 600, color: "#64748b" },
-  select: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fdfbf9" },
-  input: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", outline: "none", background: "#fdfbf9" },
-  fieldErr: { fontSize: 11, color: "#b91c1c" },
-  apiError: { color: "#b91c1c", background: "#fee2e2", padding: "9px 13px", borderRadius: 6, marginBottom: 14, fontSize: 12 },
-  updateBtn: { padding: "8px 20px", border: "none", borderRadius: 6, background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  secondaryBtn: { padding: "8px 16px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", color: "#64748b", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  sectionLabel: { margin: "0 0 8px", fontSize: 10, fontWeight: 700, color: "#8a96a3", textTransform: "uppercase" as const, letterSpacing: "0.07em" },
+  backBtn:      { background: "none", border: "none", color: "#94A3B8", fontSize: 13, cursor: "pointer", padding: 0, fontWeight: 500 },
+  editBtn:      { height: 34, padding: "0 14px", border: "1.5px solid #CBD5E1", borderRadius: 7, background: "#fff", fontSize: 12, cursor: "pointer", color: "#475569", fontWeight: 500 },
+  dangerBtn:    { height: 34, padding: "0 14px", border: "1.5px solid #DC2626", borderRadius: 7, background: "transparent", color: "#DC2626", fontSize: 12, cursor: "pointer", fontWeight: 600 },
+  card:         { background: "#fff", borderRadius: 16, padding: 24, marginBottom: 14, boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)", border: "1px solid #E8EDF2" },
+  cardTitle:    { margin: "0 0 18px", fontSize: 14, fontWeight: 700, color: "#0F172A" },
+  infoGrid:     { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14 },
+  fieldCol:     { display: "flex", flexDirection: "column", gap: 5 },
+  label:        { fontSize: 12, fontWeight: 500, color: "#334155" },
+  select:       { height: 40, padding: "0 11px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 13, color: "#0F172A", background: "#FDFBF8" },
+  input:        { height: 40, padding: "0 11px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 13, color: "#0F172A", outline: "none", background: "#FDFBF8" },
+  fieldErr:     { fontSize: 12, color: "#DC2626" },
+  apiError:     { color: "#DC2626", background: "#FEE2E2", padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, border: "1px solid #FECACA" },
+  updateBtn:    { height: 40, padding: "0 20px", border: "none", borderRadius: 8, background: "#3D9E8E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  secondaryBtn: { height: 40, padding: "0 16px", border: "1.5px solid #CBD5E1", borderRadius: 8, background: "#fff", color: "#475569", fontSize: 13, fontWeight: 500, cursor: "pointer" },
+  sectionLabel: { margin: "0 0 8px", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" as const, letterSpacing: "0.08em" },
 };

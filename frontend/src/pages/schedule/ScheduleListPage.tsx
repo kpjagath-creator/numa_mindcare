@@ -30,15 +30,15 @@ function fmtDateTime(iso: string): string {
 
 function StatusPill({ status }: { status: string }) {
   const colors: Record<string, { bg: string; color: string }> = {
-    upcoming:    { bg: "#e0f2fe", color: "#0369a1" },
-    completed:   { bg: "#dcfce7", color: "#166534" },
-    cancelled:   { bg: "#fee2e2", color: "#991b1b" },
-    no_show:     { bg: "#fef9c3", color: "#854d0e" },
-    rescheduled: { bg: "#f3e8ff", color: "#6b21a8" },
+    upcoming:    { bg: "#FEF3C7", color: "#D97706" },
+    completed:   { bg: "#DCFCE7", color: "#16A34A" },
+    cancelled:   { bg: "#FEE2E2", color: "#DC2626" },
+    no_show:     { bg: "#EDE9FE", color: "#7C3AED" },
+    rescheduled: { bg: "#EEF2FF", color: "#4338CA" },
   };
-  const c = colors[status] ?? { bg: "#f1f5f9", color: "#64748b" };
+  const c = colors[status] ?? { bg: "#F1F5F9", color: "#64748B" };
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: c.bg, color: c.color }}>
+    <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: c.bg, color: c.color, whiteSpace: "nowrap" as const }}>
       {status.replace("_", " ")}
     </span>
   );
@@ -46,13 +46,13 @@ function StatusPill({ status }: { status: string }) {
 
 function PaymentPill({ status }: { status: string }) {
   const colors: Record<string, { bg: string; color: string }> = {
-    paid:    { bg: "#dcfce7", color: "#166534" },
-    unpaid:  { bg: "#fee2e2", color: "#991b1b" },
-    partial: { bg: "#fef9c3", color: "#854d0e" },
+    paid:    { bg: "#DCFCE7", color: "#16A34A" },
+    unpaid:  { bg: "#FEF2F2", color: "#DC2626" },
+    partial: { bg: "#FEF3C7", color: "#D97706" },
   };
-  const c = colors[status] ?? { bg: "#f1f5f9", color: "#64748b" };
+  const c = colors[status] ?? { bg: "#F1F5F9", color: "#64748B" };
   return (
-    <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: c.bg, color: c.color }}>
+    <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: c.bg, color: c.color, whiteSpace: "nowrap" as const }}>
       {status}
     </span>
   );
@@ -205,7 +205,7 @@ export default function ScheduleListPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
                 className="mobile-card-title"
-                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#1A7A6E", textAlign: "left", fontWeight: 700 }}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#3D9E8E", textAlign: "left", fontWeight: 700 }}
                 onClick={() => navigate(`/patients/${sess.patientId}`)}
               >
                 {sess.patient.name}
@@ -250,7 +250,7 @@ export default function ScheduleListPage() {
             {expanded ? "Hide ▲" : "Actions ▼"}
           </button>
           <button
-            style={{ flex: 1, padding: "7px 10px", borderRadius: 9999, border: "1px solid #1A7A6E", background: "#E8F5F3", fontSize: 12, color: "#1A7A6E", cursor: "pointer", fontWeight: 600 }}
+            style={{ flex: 1, padding: "7px 10px", borderRadius: 9999, border: "1.5px solid #3D9E8E", background: "#EEF9F7", fontSize: 12, color: "#3D9E8E", cursor: "pointer", fontWeight: 600 }}
             onClick={() => setNotesSession(sess)}
           >
             Notes
@@ -265,7 +265,7 @@ export default function ScheduleListPage() {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
               {isUpcoming && (
                 <>
-                  <button style={btnStyle("#fff", "#2d6b5f")} onClick={() => { setShowCompleteInput(true); setShowCancelInput(false); setShowRescheduleForm(false); setShowNoShowInput(false); setShowPaymentInput(false); setCharges(""); setDiscoveryNotes(""); setDiscoveryNotesError(""); }}>
+                  <button style={btnStyle("#fff", "#3D9E8E")} onClick={() => { setShowCompleteInput(true); setShowCancelInput(false); setShowRescheduleForm(false); setShowNoShowInput(false); setShowPaymentInput(false); setCharges(""); setDiscoveryNotes(""); setDiscoveryNotesError(""); }}>
                     ✓ Complete
                   </button>
                   <button style={btnStyle("#991b1b", "#fee2e2")} onClick={() => { setShowCancelInput(true); setShowCompleteInput(false); setShowRescheduleForm(false); setShowNoShowInput(false); setShowPaymentInput(false); }}>
@@ -315,7 +315,7 @@ export default function ScheduleListPage() {
                   />
                 )}
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button style={{ ...btnStyle("#fff", "#2d6b5f"), flex: 2 }} onClick={async () => {
+                  <button style={{ ...btnStyle("#fff", "#3D9E8E"), flex: 2 }} onClick={async () => {
                     if (sess.sessionType === "discovery") {
                       if (!discoveryNotes.trim()) { setDiscoveryNotesError("Notes are required."); return; }
                       await handleComplete(sess.id, undefined, discoveryNotes.trim());
@@ -614,9 +614,10 @@ export default function ScheduleListPage() {
                     key={key}
                     onClick={() => toggleSort(key)}
                     style={{
-                      padding: "4px 10px", fontSize: 11, border: "1px solid #ddd5cb",
-                      borderRadius: 5, background: sortKey === key ? "#2d6b5f" : "#fff",
-                      color: sortKey === key ? "#fff" : "#64748b", cursor: "pointer", fontWeight: 500,
+                      height: 34, padding: "0 13px", fontSize: 12, border: "1.5px solid #CBD5E1",
+                      borderRadius: 20, background: sortKey === key ? "#3D9E8E" : "#fff",
+                      color: sortKey === key ? "#fff" : "#475569", cursor: "pointer", fontWeight: 600,
+                      transition: "background 0.15s ease, color 0.15s ease",
                     }}
                   >
                     {label} {sortKey === key ? (sortDir === "asc" ? "↑" : "↓") : ""}
@@ -667,15 +668,15 @@ export default function ScheduleListPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  count: { fontSize: 12, color: "#8a96a3" },
-  primaryBtn: { padding: "7px 16px", background: "#2d6b5f", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  filters: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18, alignItems: "center" },
-  filterSelect: { padding: "6px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fff" },
-  filterInput: { padding: "6px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fff" },
-  clearBtn: { padding: "6px 12px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#8a96a3" },
-  errorMsg: { color: "#b91c1c", background: "#fee2e2", padding: "9px 14px", borderRadius: 6, marginBottom: 14, fontSize: 12 },
-  muted: { color: "#8a96a3", fontSize: 12 },
-  pager: { display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 20 },
-  pageBtn: { padding: "5px 13px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 12, color: "#1a2535" },
+  topBar:       { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  count:        { fontSize: 13, color: "#94A3B8", fontWeight: 500 },
+  primaryBtn:   { height: 40, padding: "0 20px", background: "#3D9E8E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" },
+  filters:      { display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20, alignItems: "center" },
+  filterSelect: { height: 38, padding: "0 12px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 13, color: "#0F172A", background: "#fff" },
+  filterInput:  { height: 38, padding: "0 12px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 13, color: "#0F172A", background: "#fff" },
+  clearBtn:     { height: 38, padding: "0 14px", border: "1.5px solid #CBD5E1", borderRadius: 8, background: "#fff", fontSize: 13, cursor: "pointer", color: "#94A3B8" },
+  errorMsg:     { color: "#DC2626", background: "#FEE2E2", padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, border: "1px solid #FECACA" },
+  muted:        { color: "#94A3B8", fontSize: 13 },
+  pager:        { display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginTop: 20 },
+  pageBtn:      { padding: "6px 16px", border: "1.5px solid #CBD5E1", borderRadius: 8, background: "#fff", cursor: "pointer", fontSize: 13, color: "#0F172A" },
 };

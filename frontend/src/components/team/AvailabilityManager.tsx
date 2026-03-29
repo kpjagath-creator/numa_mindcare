@@ -145,9 +145,9 @@ export default function AvailabilityManager({ therapistId }: Props) {
                   type="checkbox"
                   checked={day.active}
                   onChange={e => updateSlot(day.dayOfWeek, "active", e.target.checked)}
-                  style={{ accentColor: "#2d6b5f", width: 14, height: 14 }}
+                  style={{ accentColor: "#3D9E8E", width: 14, height: 14 }}
                 />
-                <span style={{ fontSize: 12, fontWeight: day.active ? 600 : 400, color: day.active ? "#1a2535" : "#94a3b8" }}>
+                <span style={{ fontSize: 12, fontWeight: day.active ? 600 : 400, color: day.active ? "#0F172A" : "#94a3b8" }}>
                   {DAY_NAMES[day.dayOfWeek]}
                 </span>
               </label>
@@ -159,7 +159,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
                       type="time"
                       value={day.startTime}
                       onChange={e => updateSlot(day.dayOfWeek, "startTime", e.target.value)}
-                      style={{ padding: "4px 8px", border: "1px solid #ddd5cb", borderRadius: 5, fontSize: 12, color: "#1a2535", background: "#fff" }}
+                      style={{ padding: "4px 8px", border: "1px solid #ddd5cb", borderRadius: 5, fontSize: 12, color: "#0F172A", background: "#fff" }}
                     />
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -168,7 +168,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
                       type="time"
                       value={day.endTime}
                       onChange={e => updateSlot(day.dayOfWeek, "endTime", e.target.value)}
-                      style={{ padding: "4px 8px", border: "1px solid #ddd5cb", borderRadius: 5, fontSize: 12, color: "#1a2535", background: "#fff" }}
+                      style={{ padding: "4px 8px", border: "1px solid #ddd5cb", borderRadius: 5, fontSize: 12, color: "#0F172A", background: "#fff" }}
                     />
                   </div>
                 </>
@@ -183,7 +183,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
           <button
             onClick={handleSaveSlots}
             disabled={saving}
-            style={{ padding: "7px 18px", background: "#2d6b5f", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+            style={{ padding: "7px 18px", background: "#3D9E8E", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
           >
             {saving ? (
               <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -192,7 +192,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
               </span>
             ) : "Save Schedule"}
           </button>
-          {saveMsg && <span style={{ fontSize: 11, color: "#2d6b5f", fontWeight: 500 }}>{saveMsg}</span>}
+          {saveMsg && <span style={{ fontSize: 11, color: "#3D9E8E", fontWeight: 500 }}>{saveMsg}</span>}
           {saveError && <span style={{ fontSize: 11, color: "#dc2626" }}>{saveError}</span>}
         </div>
       </div>
@@ -211,7 +211,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
               type="date"
               value={newBlockDate}
               onChange={e => setNewBlockDate(e.target.value)}
-              style={{ padding: "6px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fff" }}
+              style={{ padding: "6px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#0F172A", background: "#fff" }}
             />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -221,7 +221,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
               value={newBlockReason}
               onChange={e => setNewBlockReason(e.target.value)}
               placeholder="e.g. Annual leave, Holiday"
-              style={{ padding: "6px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fff", width: 200 }}
+              style={{ padding: "6px 10px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#0F172A", background: "#fff", width: 200 }}
             />
           </div>
           <button
@@ -246,7 +246,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
                 borderRadius: 7,
               }}>
                 <div>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#1a2535" }}>{formatDate(b.blockDate)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{formatDate(b.blockDate)}</span>
                   {b.reason && <span style={{ fontSize: 11, color: "#64748b", marginLeft: 10 }}>{b.reason}</span>}
                 </div>
                 <button

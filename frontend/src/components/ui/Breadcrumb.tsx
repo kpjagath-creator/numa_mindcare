@@ -12,8 +12,8 @@ export default function Breadcrumb({ crumbs }: Props) {
         <span key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {i > 0 && <span style={{ color: "#c8c0b8" }}>›</span>}
           {c.to
-            ? <Link to={c.to} style={{ color: "#2d6b5f", textDecoration: "none", fontWeight: 500 }}>{c.label}</Link>
-            : <span style={{ color: "#1a2535", fontWeight: 600 }}>{c.label}</span>
+            ? <Link to={c.to} style={{ color: "#3D9E8E", textDecoration: "none", fontWeight: 500 }}>{c.label}</Link>
+            : <span style={{ color: "#0F172A", fontWeight: 600 }}>{c.label}</span>
           }
         </span>
       ))}

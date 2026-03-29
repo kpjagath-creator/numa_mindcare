@@ -14,7 +14,7 @@ import { useToast } from "../../components/ui/Toast";
 
 // ── Role avatar color ──────────────────────────────────────────────────────
 function roleAvatarColor(employeeType: string): { bg: string; color: string } {
-  if (employeeType === "psychologist") return { bg: "#E8F5F3", color: "#1A7A6E" };
+  if (employeeType === "psychologist") return { bg: "#E8F5F3", color: "#3D9E8E" };
   if (employeeType === "psychiatrist") return { bg: "#EEF2FF", color: "#6366F1" };
   return { bg: "#F1F5F9", color: "#64748B" };
 }
@@ -77,7 +77,7 @@ export default function TeamListPage() {
               <span style={{
                 fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 9999,
                 background: m.employeeType === "psychologist" ? "#E8F5F3" : "#EEF2FF",
-                color: m.employeeType === "psychologist" ? "#1A7A6E" : "#6366F1",
+                color: m.employeeType === "psychologist" ? "#3D9E8E" : "#6366F1",
               }}>
                 {m.employeeType}
               </span>
@@ -97,13 +97,13 @@ export default function TeamListPage() {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid #EEF2F7" }}>
           <button
-            style={{ flex: 2, padding: "8px 12px", borderRadius: 8, border: "none", background: "#1A7A6E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 2, padding: "8px 12px", borderRadius: 8, border: "none", background: "#3D9E8E", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => navigate(`/team/${m.id}/patients`)}
           >
             View Patients
           </button>
           <button
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#FEF2F2", color: "#EF4444", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowDeleteConfirm(true)}
           >
             Delete
@@ -194,9 +194,9 @@ export default function TeamListPage() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  toolbar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
-  count: { fontSize: 12, color: "#8a96a3" },
-  primaryBtn: { padding: "7px 16px", background: "#2d6b5f", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  error: { color: "#b91c1c", background: "#fee2e2", padding: "9px 14px", borderRadius: 6, marginBottom: 14, fontSize: 12 },
-  muted: { color: "#8a96a3", fontSize: 12 },
+  toolbar:    { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  count:      { fontSize: 13, color: "#94A3B8", fontWeight: 500 },
+  primaryBtn: { height: 40, padding: "0 20px", background: "#3D9E8E", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer" },
+  error:      { color: "#DC2626", background: "#FEE2E2", padding: "10px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, border: "1px solid #FECACA" },
+  muted:      { color: "#94A3B8", fontSize: 13 },
 };

@@ -87,7 +87,7 @@ export default function SearchableSelect({ options, value, onChange, placeholder
   return (
     <div ref={ref} style={{ position: "relative", ...style }}>
       <div style={{ ...s.trigger, ...(open ? s.triggerOpen : {}) }} onClick={() => setOpen((o) => !o)}>
-        <span style={{ color: selected ? "#1a2535" : "#b8c4cc", fontSize: 12 }}>
+        <span style={{ color: selected ? "#0F172A" : "#b8c4cc", fontSize: 12 }}>
           {selected ? selected.label : placeholder}
         </span>
         <span style={{ color: "#b8c4cc", fontSize: 10, marginLeft: "auto" }}>&#9662;</span>
@@ -155,7 +155,7 @@ const s: Record<string, React.CSSProperties> = {
     background: "#fdfbf9", cursor: "pointer", minHeight: 34,
     userSelect: "none",
   },
-  triggerOpen: { borderColor: "#2d6b5f", boxShadow: "0 0 0 3px rgba(45,107,95,0.12)" },
+  triggerOpen: { borderColor: "#3D9E8E", boxShadow: "0 0 0 3px rgba(61,158,142,0.15)" },
   dropdown: {
     position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
     background: "#fff", border: "1px solid #ddd5cb", borderRadius: 8,
@@ -170,9 +170,9 @@ const s: Record<string, React.CSSProperties> = {
   },
   list: { maxHeight: 200, overflowY: "auto" },
   option: {
-    padding: "8px 11px", fontSize: 12, color: "#1a2535", cursor: "pointer",
+    padding: "8px 11px", fontSize: 12, color: "#0F172A", cursor: "pointer",
     transition: "background 0.1s",
   },
-  selectedOpt: { background: "#e4f2ee", color: "#2d6b5f", fontWeight: 600 },
+  selectedOpt: { background: "#e4f2ee", color: "#3D9E8E", fontWeight: 600 },
   highlightedOpt: { background: "#f0ede8" },
 };

@@ -104,20 +104,51 @@ export default function RegisterPatientPage() {
     <Layout title="Register Patient">
       <div style={s.card}>
         <h2 style={s.heading}>New Patient</h2>
-        {apiError && <p style={s.apiError}>{apiError}</p>}
+        {apiError && (
+          <div style={s.apiError}>{apiError}</div>
+        )}
         <form onSubmit={handleSubmit} noValidate>
           <div className="form-grid">
             <Field label="Full Name *" error={touched.name ? errors.name : undefined}>
-              <input style={s.input} value={values.name} onChange={(e) => handleChange("name", e.target.value)} onBlur={() => handleBlur("name")} placeholder="Priya Sharma" />
+              <input
+                style={{ ...s.input, borderColor: touched.name && errors.name ? "#DC2626" : "#CBD5E1" }}
+                value={values.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                onBlur={() => handleBlur("name")}
+                placeholder="Priya Sharma"
+              />
             </Field>
             <Field label="Mobile *" error={touched.mobile ? errors.mobile : undefined}>
-              <input style={s.input} value={values.mobile} onChange={(e) => handleChange("mobile", e.target.value)} onBlur={() => handleBlur("mobile")} placeholder="9876543210" maxLength={10} />
+              <input
+                style={{ ...s.input, borderColor: touched.mobile && errors.mobile ? "#DC2626" : "#CBD5E1" }}
+                value={values.mobile}
+                onChange={(e) => handleChange("mobile", e.target.value)}
+                onBlur={() => handleBlur("mobile")}
+                placeholder="9876543210"
+                maxLength={10}
+              />
             </Field>
             <Field label="Email *" error={touched.email ? errors.email : undefined}>
-              <input style={s.input} type="email" value={values.email} onChange={(e) => handleChange("email", e.target.value)} onBlur={() => handleBlur("email")} placeholder="priya@example.com" />
+              <input
+                style={{ ...s.input, borderColor: touched.email && errors.email ? "#DC2626" : "#CBD5E1" }}
+                type="email"
+                value={values.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                onBlur={() => handleBlur("email")}
+                placeholder="priya@example.com"
+              />
             </Field>
             <Field label="Age *" error={touched.age ? errors.age : undefined}>
-              <input style={s.input} type="number" min={1} max={120} value={values.age} onChange={(e) => handleChange("age", e.target.value)} onBlur={() => handleBlur("age")} placeholder="28" />
+              <input
+                style={{ ...s.input, borderColor: touched.age && errors.age ? "#DC2626" : "#CBD5E1" }}
+                type="number"
+                min={1}
+                max={120}
+                value={values.age}
+                onChange={(e) => handleChange("age", e.target.value)}
+                onBlur={() => handleBlur("age")}
+                placeholder="28"
+              />
             </Field>
             <Field label="Source">
               <select style={s.select} value={values.source} onChange={(e) => handleChange("source", e.target.value)}>
@@ -129,9 +160,14 @@ export default function RegisterPatientPage() {
               </select>
             </Field>
             <Field label="Referred By">
-              <input style={s.input} value={values.referred_by} onChange={(e) => handleChange("referred_by", e.target.value)} placeholder="Dr. Anil Kumar" />
+              <input
+                style={s.input}
+                value={values.referred_by}
+                onChange={(e) => handleChange("referred_by", e.target.value)}
+                placeholder="Dr. Anil Kumar"
+              />
             </Field>
-            <Field label="Assign Therapist (optional)" error={undefined}>
+            <Field label="Assign Therapist (optional)">
               <select style={s.select} value={values.therapist_id} onChange={(e) => handleChange("therapist_id", e.target.value)}>
                 <option value="">No therapist assigned</option>
                 {therapists.map((t) => (
@@ -159,21 +195,21 @@ export default function RegisterPatientPage() {
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>{label}</label>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <label style={{ fontSize: 13, fontWeight: 500, color: "#334155" }}>{label}</label>
       {children}
-      {error && <span style={{ fontSize: 11, color: "#b91c1c" }}>{error}</span>}
+      {error && <span style={{ fontSize: 12, color: "#DC2626" }}>{error}</span>}
     </div>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
-  card: { background: "#fff", borderRadius: 12, padding: 28, maxWidth: 780, boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 4px 14px rgba(0,0,0,0.04)", border: "1px solid #ddd5cb" },
-  heading: { marginTop: 0, marginBottom: 22, fontSize: 14, fontWeight: 700, color: "#1a2535" },
-  apiError: { color: "#b91c1c", background: "#fee2e2", padding: "9px 13px", borderRadius: 6, marginBottom: 18, fontSize: 12 },
-  input: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", outline: "none", width: "100%", background: "#fdfbf9" },
-  select: { padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fdfbf9", cursor: "pointer", width: "100%" },
-  actions: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 },
-  cancelBtn: { padding: "8px 18px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#64748b" },
-  submitBtn: { padding: "8px 20px", border: "none", borderRadius: 6, background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  card:      { background: "#fff", borderRadius: 16, padding: 32, maxWidth: 800, boxShadow: "0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)", border: "1px solid #E8EDF2" },
+  heading:   { marginTop: 0, marginBottom: 24, fontSize: 18, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" },
+  apiError:  { color: "#DC2626", background: "#FEE2E2", padding: "10px 14px", borderRadius: 8, marginBottom: 20, fontSize: 13, border: "1px solid #FECACA" },
+  input:     { height: 44, padding: "0 12px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 14, color: "#0F172A", outline: "none", width: "100%", background: "#FDFBF8" },
+  select:    { height: 44, padding: "0 12px", border: "1.5px solid #CBD5E1", borderRadius: 8, fontSize: 14, color: "#0F172A", background: "#FDFBF8", cursor: "pointer", width: "100%" },
+  actions:   { display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 },
+  cancelBtn: { height: 40, padding: "0 20px", border: "1.5px solid #CBD5E1", borderRadius: 8, background: "#fff", fontSize: 14, cursor: "pointer", color: "#475569", fontWeight: 500 },
+  submitBtn: { height: 40, padding: "0 24px", border: "none", borderRadius: 8, background: "#3D9E8E", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" },
 };

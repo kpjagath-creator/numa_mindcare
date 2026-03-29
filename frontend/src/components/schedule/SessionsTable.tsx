@@ -200,7 +200,7 @@ export default function SessionsTable({
                 <tr key={sess.id} style={s.row}>
                   {showPatient && (
                     <td style={s.td}>
-                      <Link to={`/patients/${sess.patientId}`} style={{ color: "#1A7A6E", fontWeight: 600, fontSize: 12, textDecoration: "none" }}>
+                      <Link to={`/patients/${sess.patientId}`} style={{ color: "#3D9E8E", fontWeight: 600, fontSize: 12, textDecoration: "none" }}>
                         {sess.patient.name}
                       </Link>
                       <span style={s.sub}>{sess.patient.patientNumber}</span>
@@ -282,7 +282,7 @@ export default function SessionsTable({
         return (
           <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) { setCompleteId(null); setDiscoveryNotes(""); setDiscoveryNotesError(""); setChargesInput(""); setChargesError(""); } }}>
             <div style={modalCard} className="modal-card">
-              <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
+              <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
                 {isDiscovery ? "Complete Discovery Call" : "Complete Session"}
               </h3>
               {isDiscovery ? (
@@ -339,7 +339,7 @@ export default function SessionsTable({
       {cancelId !== null && (
         <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setCancelId(null); }}>
           <div style={modalCard} className="modal-card">
-            <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
+            <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
               Cancel Session
             </h3>
             <p style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
@@ -365,7 +365,7 @@ export default function SessionsTable({
       {rescheduleId !== null && (
         <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setRescheduleId(null); }}>
           <div style={modalCard} className="modal-card">
-            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
               Reschedule Session
             </h3>
             <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
@@ -402,7 +402,7 @@ export default function SessionsTable({
       {noShowId !== null && (
         <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setNoShowId(null); }}>
           <div style={modalCard} className="modal-card">
-            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
               Mark as No Show
             </h3>
             <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
@@ -448,7 +448,7 @@ export default function SessionsTable({
       {paymentNameId !== null && (
         <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setPaymentNameId(null); }}>
           <div style={modalCard} className="modal-card">
-            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#1a2535" }}>
+            <h3 style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
               Update Payment Status
             </h3>
             <p style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
@@ -490,14 +490,14 @@ const s: Record<string, React.CSSProperties> = {
   th: { padding: "9px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#8a96a3", textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: "1px solid #ede7df" },
   row: { borderBottom: "1px solid #f5f0ea" },
   td: { padding: "10px 14px", fontSize: 12, color: "#3d4f60", verticalAlign: "middle" },
-  name: { display: "block", fontWeight: 500, color: "#1a2535" },
+  name: { display: "block", fontWeight: 500, color: "#0F172A" },
   sub: { display: "block", fontSize: 10, color: "#b8c4cc", marginTop: 1 },
   badge: { padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" },
-  chargesInput: { width: "100%", padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, color: "#1a2535", background: "#fdfbf9", boxSizing: "border-box" as const, outline: "none" },
-  reasonInput: { width: "100%", padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#1a2535", background: "#fdfbf9", resize: "vertical" as const, boxSizing: "border-box" as const, outline: "none" },
+  chargesInput: { width: "100%", padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 13, color: "#0F172A", background: "#fdfbf9", boxSizing: "border-box" as const, outline: "none" },
+  reasonInput: { width: "100%", padding: "8px 11px", border: "1px solid #ddd5cb", borderRadius: 6, fontSize: 12, color: "#0F172A", background: "#fdfbf9", resize: "vertical" as const, boxSizing: "border-box" as const, outline: "none" },
   modalCancelBtn: { padding: "7px 16px", border: "1px solid #ddd5cb", borderRadius: 6, background: "#fff", fontSize: 12, cursor: "pointer", color: "#64748b" },
   modalConfirmBtn: { padding: "7px 16px", border: "none", borderRadius: 6, background: "#e53e3e", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  modalCompleteBtn: { padding: "7px 16px", border: "none", borderRadius: 6, background: "#2d6b5f", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  modalCompleteBtn: { padding: "7px 16px", border: "none", borderRadius: 6, background: "#3D9E8E", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   modalRescheduleBtn: { padding: "7px 16px", border: "none", borderRadius: 6, background: "#3730a3", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
   modalNoShowBtn: { padding: "7px 16px", border: "none", borderRadius: 6, background: "#92400e", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" },
 };
