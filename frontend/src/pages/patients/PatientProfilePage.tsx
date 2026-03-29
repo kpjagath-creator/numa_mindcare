@@ -31,11 +31,8 @@ function getAdminName(): string {
   return "Admin";
 }
 
-function avatarColor(name: string): string {
-  const colors = ["#6366F1","#3D9E8E","#F59E0B","#EF4444","#8B5CF6","#EC4899","#10B981","#0EA5E9"];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
+function avatarColor(_name: string): string {
+  return "#3D9E8E";
 }
 
 function initialsOf(name: string): string {

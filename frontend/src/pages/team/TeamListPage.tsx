@@ -12,11 +12,9 @@ import { listTeamMembers, deleteTeamMember } from "../../api/teamMembers";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../components/ui/Toast";
 
-// ── Role avatar color ──────────────────────────────────────────────────────
-function roleAvatarColor(employeeType: string): { bg: string; color: string } {
-  if (employeeType === "psychologist") return { bg: "#E8F5F3", color: "#3D9E8E" };
-  if (employeeType === "psychiatrist") return { bg: "#EEF2FF", color: "#6366F1" };
-  return { bg: "#F1F5F9", color: "#64748B" };
+// ── Uniform avatar color ───────────────────────────────────────────────────
+function roleAvatarColor(_employeeType: string): { bg: string; color: string } {
+  return { bg: "#EEF9F7", color: "#3D9E8E" };
 }
 
 function initials(name: string): string {
@@ -76,8 +74,8 @@ export default function TeamListPage() {
               <div className="mobile-card-title" style={{ flex: 1, marginRight: 8 }}>{m.name}</div>
               <span style={{
                 fontSize: 12, fontWeight: 600, padding: "3px 10px", borderRadius: 9999,
-                background: m.employeeType === "psychologist" ? "#E8F5F3" : "#EEF2FF",
-                color: m.employeeType === "psychologist" ? "#3D9E8E" : "#6366F1",
+                background: "#EEF9F7",
+                color: "#3D9E8E",
               }}>
                 {m.employeeType}
               </span>

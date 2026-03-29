@@ -16,11 +16,8 @@ import { useToast } from "../../components/ui/Toast";
 
 const LIMIT = 20;
 
-function avatarColor(name: string): string {
-  const colors = ["#6366F1","#3D9E8E","#F59E0B","#DC2626","#8B5CF6","#EC4899","#16A34A","#0EA5E9"];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
+function avatarColor(_name: string): string {
+  return "#3D9E8E";
 }
 function initials(name: string): string {
   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);

@@ -15,10 +15,8 @@ const TYPE_LABELS: Record<string, string> = {
   psychiatrist: "Psychiatrist",
 };
 
-function roleAvatarColor(employeeType: string): { bg: string; color: string } {
-  if (employeeType === "psychologist") return { bg: "#EEF9F7", color: "#3D9E8E" };
-  if (employeeType === "psychiatrist") return { bg: "#EEF2FF", color: "#6366F1" };
-  return { bg: "#F1F5F9", color: "#64748B" };
+function roleAvatarColor(_employeeType: string): { bg: string; color: string } {
+  return { bg: "#EEF9F7", color: "#3D9E8E" };
 }
 
 function initials(name: string): string {

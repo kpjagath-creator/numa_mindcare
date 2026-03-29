@@ -5,25 +5,18 @@ import Layout from "../../components/layout/Layout";
 import { getDashboardStats, DashboardStats } from "../../api/analytics";
 import { useIsMobile } from "../../hooks/useIsMobile";
 
-// ── Distinct colors per therapist bar ─────────────────────────────────────
-const THERAPIST_COLORS = [
-  "linear-gradient(90deg, #3D9E8E, #4DB8A5)",
-  "linear-gradient(90deg, #6366F1, #818CF8)",
-  "linear-gradient(90deg, #F59E0B, #FBBF24)",
-  "linear-gradient(90deg, #EC4899, #F472B6)",
-  "linear-gradient(90deg, #0EA5E9, #38BDF8)",
-  "linear-gradient(90deg, #8B5CF6, #A78BFA)",
-];
+// ── Uniform teal color for all therapist bars ──────────────────────────────
+const THERAPIST_BAR = "linear-gradient(90deg, #3D9E8E, #4BBCAC)";
 
-// ── Distinct colors per referral source ───────────────────────────────────
-const REFERRAL_COLORS = ["#3D9E8E", "#6366F1", "#F59E0B", "#EC4899", "#0EA5E9", "#8B5CF6"];
+// ── Uniform teal for all referral source dots ──────────────────────────────
+const REFERRAL_DOT = "#3D9E8E";
 
-// ── Mobile KPI accent config ───────────────────────────────────────────────
+// ── Uniform KPI accent — teal across all cards ────────────────────────────
 const KPI_ACCENT = [
-  { accent: "#6366F1", bg: "#EEF2FF" },  // Active Patients — indigo
-  { accent: "#3D9E8E", bg: "#EEF9F7" },  // This Week — teal
-  { accent: "#16A34A", bg: "#DCFCE7" },  // Revenue — green (not red!)
-  { accent: "#D97706", bg: "#FEF3C7" },  // Upcoming — amber
+  { accent: "#3D9E8E", bg: "#EEF9F7" },
+  { accent: "#3D9E8E", bg: "#EEF9F7" },
+  { accent: "#3D9E8E", bg: "#EEF9F7" },
+  { accent: "#3D9E8E", bg: "#EEF9F7" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -77,7 +70,7 @@ function StatCard({
 }) {
   const animated = useCountUp(rawValue ?? 0);
   const displayValue = rawValue !== undefined ? animated : value;
-  const numberColor = isRevenue ? "#16A34A" : (accentColor ?? "#0F172A");
+  const numberColor = accentColor ?? "#0F172A";
 
   return (
     <div style={{
@@ -215,7 +208,7 @@ export default function DashboardPage() {
                 value={stats.totalActivePatients}
                 rawValue={stats.totalActivePatients}
                 sub={`+${stats.newPatientsThisMonth} new this month`}
-                accentColor="#6366F1"
+                accentColor="#3D9E8E"
               />
               <StatCard
                 label="Sessions This Week"
@@ -229,7 +222,7 @@ export default function DashboardPage() {
                 value={stats.sessionsThisMonth.completed + stats.sessionsThisMonth.upcoming + stats.sessionsThisMonth.cancelled}
                 rawValue={stats.sessionsThisMonth.completed + stats.sessionsThisMonth.upcoming + stats.sessionsThisMonth.cancelled}
                 sub={`${stats.sessionsThisMonth.completed} done · ${stats.sessionsThisMonth.cancelled} cancelled`}
-                accentColor="#0EA5E9"
+                accentColor="#3D9E8E"
               />
               {(() => {
                 const rev = stats.revenueThisMonth;
@@ -251,7 +244,7 @@ export default function DashboardPage() {
                 value={stats.upcomingThisWeekCount}
                 rawValue={stats.upcomingThisWeekCount}
                 sub="scheduled sessions"
-                accentColor="#D97706"
+                accentColor="#3D9E8E"
               />
             </div>
           )}
@@ -315,7 +308,7 @@ export default function DashboardPage() {
                           </div>
                           <div style={{ background: "#E8EDF2", borderRadius: 4, height: 7 }}>
                             <div style={{
-                              background: THERAPIST_COLORS[i % THERAPIST_COLORS.length],
+                              background: THERAPIST_BAR,
                               borderRadius: 4,
                               height: 7,
                               width: `${(t.sessionsThisWeek / max) * 100}%`,
@@ -342,7 +335,7 @@ export default function DashboardPage() {
                         const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
                         return (
                           <div key={r.source} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: REFERRAL_COLORS[i % REFERRAL_COLORS.length], flexShrink: 0 }} />
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: REFERRAL_DOT, flexShrink: 0 }} />
                             <div style={{ flex: 1, fontSize: 13, color: "#334155" }}>{r.source}</div>
                             <div style={{ fontSize: 13, color: "#475569", fontWeight: 600 }}>{r.count}</div>
                             <div style={{ fontSize: 12, color: "#94A3B8", minWidth: 34, textAlign: "right" }}>{pct}%</div>
@@ -403,7 +396,7 @@ export default function DashboardPage() {
                           </div>
                           <div style={{ background: "#E8EDF2", borderRadius: 4, height: 7 }}>
                             <div style={{
-                              background: THERAPIST_COLORS[i % THERAPIST_COLORS.length],
+                              background: THERAPIST_BAR,
                               borderRadius: 4,
                               height: 7,
                               width: `${(t.sessionsThisWeek / max) * 100}%`,
@@ -430,7 +423,7 @@ export default function DashboardPage() {
                         const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
                         return (
                           <div key={r.source} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: REFERRAL_COLORS[i % REFERRAL_COLORS.length], flexShrink: 0 }} />
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: REFERRAL_DOT, flexShrink: 0 }} />
                             <div style={{ flex: 1, fontSize: 12, color: "#334155" }}>{r.source}</div>
                             <div style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>{r.count}</div>
                             <div style={{ fontSize: 11, color: "#94A3B8", minWidth: 32, textAlign: "right" }}>{pct}%</div>
