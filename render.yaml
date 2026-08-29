@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: numa-mindcare-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: node build/app.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false

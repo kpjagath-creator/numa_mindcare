@@ -41,7 +41,7 @@ app.use("/api/v1", v1Router);
 // ── Global error handler (must be last) ───────────────────────────────────────
 app.use(errorHandler);
 
-const PORT = process.env.PORT ?? 4000;
+const PORT = process.env.PORT ?? 3001;
 app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
