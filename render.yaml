@@ -3,7 +3,7 @@ services:
     name: numa-mindcare-backend
     env: node
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npm run build
     preDeployCommand: npx prisma migrate deploy
     startCommand: node build/app.js
     envVars:
