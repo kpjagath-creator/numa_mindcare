@@ -183,6 +183,40 @@ created → discovery_scheduled → discovery_completed → started_therapy
 - `started_therapy` → `schedule_completed` / `therapy_paused` / `patient_dropped`
 - `therapy_paused` → `started_therapy` / `patient_dropped`
 
+### Patient Lifecycle capability (added 2026-08-30)
+
+Both the automatic and manual transitions above are now applied by one function:
+`transitionPatientStatus(tx, patientId, toStatus, changedByName, notes?)` in
+`backend/src/services/patientLifecycleService.ts`.
+
+- **What it owns:** re-reading the patient's current status inside `tx`, validating the transition
+  against a `VALID_TRANSITIONS` map (one map, covers every legal edge — manual and automatic
+  alike), updating `Patient.currentStatus`, and creating the `PatientStatusLog` row. Throws a
+  `404` for an unknown patient or a `409` for an illegal transition.
+- **What it does NOT own:** deciding *when* to attempt a transition. `therapySessionsService.ts`
+  still contains the `sessionType`/current-status precondition checks (e.g.
+  `sessionType === "discovery" && patient.currentStatus === "created"`) — it only calls
+  `transitionPatientStatus` when that precondition already holds, so "don't auto-advance if the
+  patient isn't in the expected state" is unchanged from before this refactor.
+- **How Scheduling invokes it:** `therapySessionsService.createSession` and `.completeSession`
+  call `transitionPatientStatus(tx, patientId, toStatus, "system", noteText)`, passing the same
+  `tx` the session write itself uses — so session create/complete + lifecycle transition +
+  audit log remain one atomic operation, exactly as before.
+- **How Patients invokes it:** `patientsService.updatePatientStatus` now just wraps a call to
+  `transitionPatientStatus` in its own `prisma.$transaction`.
+- **Transaction requirement:** `transitionPatientStatus` never opens its own transaction — it
+  always requires an existing `tx` from the caller. Do not call it with the top-level `prisma`
+  client.
+- **Behavior change to be aware of:** before this change, `PATCH /patients/:id/status` accepted
+  any `PatientStatus` enum value regardless of the patient's current status (no legality check
+  existed on the manual path). It now rejects an illegal transition with `409`. This was the
+  point of centralizing validation (SPEC.md §3) — flagged here since it's the one externally
+  observable behavior change from this refactor.
+- **Tests:** `backend/src/services/__tests__/` (`npm test` in `backend/`, vitest) — covers valid/
+  invalid transitions, precondition-gated automatic transitions, audit logging, and transaction
+  rollback, against an in-memory Prisma double (`fakePrisma.ts`) since the repo has no test
+  database.
+
 ---
 
 ## 7. Key Components — Detailed Reference
@@ -356,19 +390,21 @@ async function refreshPatientAndSessions() {
 - Validates therapist/patient existence
 - Resolves start/end datetime
 - Creates session inside `prisma.$transaction`
-- Auto-advances patient status in same transaction:
+- Auto-advances patient status in same transaction, via the Patient Lifecycle capability
+  (see §6, "Patient Lifecycle capability") — Scheduling still owns the precondition check, Patient Lifecycle owns the mutation:
   ```typescript
   if (sessionType === "discovery" && patient.currentStatus === "created") {
-    await tx.patient.update({ where: { id }, data: { currentStatus: "discovery_scheduled" } });
+    await transitionPatientStatus(tx, patientId, "discovery_scheduled", "system", noteText);
   }
   if (sessionType === "therapy" && patient.currentStatus === "discovery_completed") {
-    await tx.patient.update({ where: { id }, data: { currentStatus: "started_therapy" } });
+    await transitionPatientStatus(tx, patientId, "started_therapy", "system", noteText);
   }
   ```
 
 #### `completeSession(id, input)`
 - Marks session `completed`, saves notes/charges
-- Auto-advances status: `discovery_scheduled → discovery_completed` (for discovery sessions)
+- Auto-advances status: `discovery_scheduled → discovery_completed` (for discovery sessions), via
+  the same `transitionPatientStatus` call described in §6, "Patient Lifecycle capability"
 
 #### `rescheduleSession(id, input)` — CRITICAL
 - Cancels the original session
@@ -566,6 +602,7 @@ Username/password login + centralized permission-based RBAC, deployed to product
 | What you need to change | File |
 |---|---|
 | Session create / complete / reschedule / cancel logic | `backend/src/services/therapySessionsService.ts` |
+| Patient lifecycle transition validation, mutation, audit log (manual + automatic) | `backend/src/services/patientLifecycleService.ts` |
 | Session API route definitions | `backend/src/routes/therapySessionRoutes.ts` |
 | Session API controller (request parsing) | `backend/src/controllers/therapySessionsController.ts` |
 | Create new session modal | `frontend/src/components/schedule/AddSessionModal.tsx` |

@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { generatePatientNumber } from "../utils/generateCodes";
+import { transitionPatientStatus } from "./patientLifecycleService";
 import type {
   Patient,
   PatientStatusLog,
@@ -136,27 +137,9 @@ export async function updatePatientStatus(
   id: number,
   input: UpdateStatusInput
 ): Promise<Patient> {
-  const existing = await getPatientById(id);
-
-  return prisma.$transaction(async (tx) => {
-    const updated = await tx.patient.update({
-      where: { id },
-      data: { currentStatus: input.new_status },
-      include: { therapist: { select: therapistSelect } },
-    });
-
-    await tx.patientStatusLog.create({
-      data: {
-        patientId: id,
-        previousStatus: existing.currentStatus,
-        newStatus: input.new_status,
-        changedByName: input.changed_by_name,
-        notes: input.notes ?? null,
-      },
-    });
-
-    return updated as unknown as Patient;
-  });
+  return prisma.$transaction(async (tx) =>
+    transitionPatientStatus(tx, id, input.new_status, input.changed_by_name, input.notes)
+  );
 }
 
 // ── updatePatientTherapist ─────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 // Service layer for therapy session operations.
 
 import prisma from "../lib/prisma";
+import { transitionPatientStatus } from "./patientLifecycleService";
 import type { TherapySession, CreateSessionInput, CancelSessionInput, CompleteSessionInput, ListSessionsQuery, PaginatedResult, RescheduleSessionInput, NoShowSessionInput, UpdatePaymentStatusInput } from "../types/index";
 
 // ── Shared include shape ───────────────────────────────────────────────────────
@@ -89,29 +90,25 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
       include: sessionInclude,
     });
 
-    // Auto-advance patient status based on session type
+    // Auto-advance patient status based on session type — Scheduling decides *when* to attempt a
+    // transition (the sessionType/precondition check below); Patient Lifecycle owns whether the
+    // transition is legal and performs the mutation + audit log.
     if (sessionType === "discovery" && patient.currentStatus === "created") {
-      await tx.patient.update({ where: { id: input.patient_id }, data: { currentStatus: "discovery_scheduled" } });
-      await tx.patientStatusLog.create({
-        data: {
-          patientId: input.patient_id,
-          previousStatus: "created",
-          newStatus: "discovery_scheduled",
-          changedByName: "system",
-          notes: `Discovery call scheduled with ${therapist.name}.`,
-        },
-      });
+      await transitionPatientStatus(
+        tx,
+        input.patient_id,
+        "discovery_scheduled",
+        "system",
+        `Discovery call scheduled with ${therapist.name}.`
+      );
     } else if (sessionType === "therapy" && patient.currentStatus === "discovery_completed") {
-      await tx.patient.update({ where: { id: input.patient_id }, data: { currentStatus: "started_therapy" } });
-      await tx.patientStatusLog.create({
-        data: {
-          patientId: input.patient_id,
-          previousStatus: "discovery_completed",
-          newStatus: "started_therapy",
-          changedByName: "system",
-          notes: `First therapy session scheduled with ${therapist.name}.`,
-        },
-      });
+      await transitionPatientStatus(
+        tx,
+        input.patient_id,
+        "started_therapy",
+        "system",
+        `First therapy session scheduled with ${therapist.name}.`
+      );
     }
 
     return mapSession(session);
@@ -198,16 +195,13 @@ export async function completeSession(id: number, input: CompleteSessionInput): 
     if (existing.sessionType === "discovery") {
       const patient = await tx.patient.findUnique({ where: { id: existing.patientId } });
       if (patient && patient.currentStatus === "discovery_scheduled") {
-        await tx.patient.update({ where: { id: existing.patientId }, data: { currentStatus: "discovery_completed" } });
-        await tx.patientStatusLog.create({
-          data: {
-            patientId: existing.patientId,
-            previousStatus: "discovery_scheduled",
-            newStatus: "discovery_completed",
-            changedByName: "system",
-            notes: "Discovery call completed.",
-          },
-        });
+        await transitionPatientStatus(
+          tx,
+          existing.patientId,
+          "discovery_completed",
+          "system",
+          "Discovery call completed."
+        );
       }
     }
 

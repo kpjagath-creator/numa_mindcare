@@ -2,7 +2,7 @@
 
 Canonical reference for system structure, domain boundaries, dependency direction, data ownership, transaction boundaries, and the modular-monolith strategy. Read this alongside `SPEC.md` (product behavior) and `CLAUDE.md` (permanent engineering rules) — see §17 for how these documents relate.
 
-Everything under "Current state" below was verified directly against the repository on 2026-08-30 (services, controllers, routes, `schema.prisma`, middleware, frontend pages/api clients). Everything under "Target" or "Recommendation" headings is **not implemented** — it describes a direction, not a fact about the code today.
+Everything under "Current state" below was verified directly against the repository on 2026-08-30 (services, controllers, routes, `schema.prisma`, middleware, frontend pages/api clients), **except** §2's cross-service-import claim, §3's Patient Lifecycle section, §5, §6.2, §12, and §14 step 1, which were updated 2026-08-30 (Phase 2) to reflect the Patient Lifecycle capability introduced that day — see the dated PROJECT_MEMORY.md entry for the change itself. Everything else under "Target" or "Recommendation" headings remains **not implemented** — it describes a direction, not a fact about the code today.
 
 ---
 
@@ -56,10 +56,10 @@ routes → controllers → services → Prisma → PostgreSQL
 ```
 
 - Controllers never call Prisma directly.
-- **No service imports another service** — grep across `services/*.ts` found zero cross-service imports. Every service reaches the database independently through the shared Prisma client.
-- This means module isolation today comes from *file-organization convention and the absence of service-to-service calls*, not from an enforced boundary. Nothing in the codebase (no lint rule, no dependency-cruiser config, no module index) would stop a new service from importing another service's internals or writing directly to a table it doesn't own. See §5 for the one place this already matters in practice.
+- **One intentional exception as of 2026-08-30 (Phase 2):** `therapySessionsService.ts` imports `transitionPatientStatus` from `patientsService`'s sibling file `patientLifecycleService.ts` — Scheduling calling a Patients-owned public operation instead of writing `Patient`/`PatientStatusLog` directly. This is the one sanctioned cross-service import in the codebase; see §5 and §12. Outside this single case, no service imports another service, and every other service still reaches the database independently through the shared Prisma client.
+- This means module isolation today comes from *file-organization convention and the absence of (other) service-to-service calls*, not from an enforced boundary. Nothing in the codebase (no lint rule, no dependency-cruiser config, no module index) would stop a new service from importing another service's internals or writing directly to a table it doesn't own.
 
-Do not read this as stronger isolation than it is: "no service imports another service" is true today by discipline, and by the fact that cross-domain writes (§5) are done by reaching into Prisma models directly rather than by calling another domain's service.
+Do not read this as stronger isolation than it is: outside the one sanctioned Patient Lifecycle import, "no service imports another service" is true today by discipline, not by enforcement.
 
 ---
 
@@ -70,19 +70,19 @@ Domains below are organized by file/folder convention (one service file per doma
 ### Patients
 - **Owns:** patient registration, profile data, manual status transitions, therapist assignment, status audit log.
 - **Key entities:** `Patient`, `PatientStatusLog`, `PatientAssignment`.
-- **Key behavior:** `createPatient` (transactional — generates patient number, creates patient, writes initial status log), `updatePatientStatus` (manual transitions, writes status log), `updatePatientTherapist`, `updatePatientInfo`, `getStatusLogs`. Source: `backend/src/services/patientsService.ts`.
+- **Key behavior:** `createPatient` (transactional — generates patient number, creates patient, writes initial status log), `updatePatientStatus` (manual transitions — delegates to the Patient Lifecycle capability, see below), `updatePatientTherapist`, `updatePatientInfo`, `getStatusLogs`. Source: `backend/src/services/patientsService.ts`.
 - **Depends on:** `TeamMember` (read-only, to validate/display assigned therapist).
-- **Depended on by:** Scheduling (writes `Patient.currentStatus` and `PatientStatusLog` directly — see §5).
+- **Depended on by:** Scheduling (calls the Patient Lifecycle capability — see §5).
 
 ### Patient lifecycle
-Not a separate backend module — it's a cross-cutting concern (state machine on `Patient.currentStatus`) whose *manual* transitions are owned by the Patients domain and whose *automatic* transitions are currently implemented inside the Scheduling domain's service. See §5 and §6.
+As of 2026-08-30 (Phase 2), this is an explicit backend capability — `transitionPatientStatus` in `backend/src/services/patientLifecycleService.ts`, inside the Patients domain (not a new module/folder). It owns the transition-validity map, the `Patient.currentStatus` mutation, and the `PatientStatusLog` write, for **both** manual transitions (called from `patientsService.updatePatientStatus`) and automatic, session-event-driven transitions (called from `therapySessionsService.createSession` / `completeSession`). It never opens its own transaction — every call passes the caller's existing Prisma `tx`, so it participates atomically in whichever business operation triggered it. Scheduling still owns deciding *when* to attempt a transition (the `sessionType`/current-status precondition checks that gate the automatic transitions stayed in `therapySessionsService.ts`); Patient Lifecycle owns *whether it's legal* plus the mutation and audit log. See §5, §6.2, §12.
 
 ### Scheduling / Therapy sessions
 - **Owns:** session create/list/get/delete, cancel, complete, reschedule, no-show, payment-status update, per-therapist scheduling conflict detection.
 - **Key entities:** `TherapySession`.
 - **Key behavior:** `backend/src/services/therapySessionsService.ts` (400 lines — the largest and most central service). Conflict detection excludes `cancelled`/`rescheduled`/`no_show` sessions when checking for time-range overlaps for a given patient or therapist.
 - **Depends on:** `Patient` (existence check, read `currentStatus`), `TeamMember` (existence check).
-- **Cross-domain writes:** creates/updates `Patient.currentStatus` and inserts `PatientStatusLog` rows directly, inside the same Prisma transaction as the session write, for the auto-advance rules in §6. This is a verified, current architectural seam — see §5.
+- **Cross-domain writes:** as of 2026-08-30 (Phase 2), `createSession`/`completeSession` no longer write `Patient`/`PatientStatusLog` directly — they call `patientLifecycleService.transitionPatientStatus(tx, ...)` (Patients domain) inside the same Prisma transaction as the session write, for the auto-advance rules in §6. See §5.
 
 ### Team / Therapists
 - **Owns:** team member CRUD, listing a therapist's assigned patients.
@@ -142,13 +142,13 @@ Verified against `backend/prisma/schema.prisma` (single schema, single `PrismaCl
 
 Legitimate, currently-implemented cross-domain relationships:
 
-- **Scheduling → Patient lifecycle (write).** `therapySessionsService.ts` directly updates `Patient.currentStatus` and inserts `PatientStatusLog` rows in `createSession` (discovery scheduled → `discovery_scheduled`; therapy scheduled while `discovery_completed` → `started_therapy`) and in `completeSession` (discovery completed → `discovery_completed`). **This is documented here honestly as a current architectural seam, not a designed cross-domain API.** Scheduling reaches into Patients' owned tables directly rather than calling a Patients-owned operation. It is transactionally correct (same `tx`) but structurally couples the two domains at the code level — the Patients domain does not have a single function that owns "what happens on a status change"; that logic is split between `patientsService.updatePatientStatus` (manual) and inline blocks in `therapySessionsService.ts` (automatic).
+- **Scheduling → Patient lifecycle (write, via a public operation as of 2026-08-30).** `therapySessionsService.ts` calls `patientLifecycleService.transitionPatientStatus(tx, patientId, toStatus, "system", notes)` in `createSession` (discovery scheduled → `discovery_scheduled`; therapy scheduled while `discovery_completed` → `started_therapy`) and in `completeSession` (discovery completed → `discovery_completed`), instead of writing `Patient`/`PatientStatusLog` directly. **This is now a designed cross-domain API call, not an inline write into another domain's tables** — it is the one sanctioned cross-service import in the codebase (§2). It is transactionally correct (same `tx` threaded through) and the Patients domain now has a single function (`transitionPatientStatus`) that owns "what happens on a status change," called by both the manual path (`patientsService.updatePatientStatus`) and the automatic path (`therapySessionsService.ts`). Scheduling still decides *when* to attempt a transition (the `sessionType`/current-status precondition checks stayed in `therapySessionsService.ts`, unchanged); it no longer decides *whether* the transition is legal or performs the mutation/audit write itself.
 - **Scheduling → Patient/Team (read).** Every session operation validates patient/therapist existence via a straight `findUnique` — a normal, low-risk read dependency.
 - **Clinical → Therapy sessions.** `clinicalNotesService.ts` requires a valid `sessionId` (existence check against `TherapySession`) — notes are scoped to sessions, not directly to patients. Legitimate read dependency, no write-side coupling.
 - **Billing → Therapy sessions.** Not a separate domain in code (§3) — payment fields live on `TherapySession` itself, so there is no cross-domain relationship to document beyond "billing is part of scheduling's owned data."
 - **Analytics → multiple operational domains (read-only).** `analyticsService.ts` reads `Patient` and `TherapySession` (and related aggregates) to compute dashboard/revenue figures. This is an intentional, appropriate pattern for a monolith's reporting layer — the risk to watch (§11) is analytics logic growing dependent on the *internal* shape of other domains' tables as those tables evolve, rather than reading through a stable, intentional interface.
 
-**Summary of the one seam requiring attention:** therapy-session workflows currently contain patient-lifecycle side effects (writing `Patient`/`PatientStatusLog` directly). This is called out in CLAUDE.md rule #1 as the source of most historical bugs (see `context.md` §9 for the incident history) and is the top candidate for the boundary-strengthening work described in §12–14. No change is being made as part of this document.
+**Status of this seam (updated 2026-08-30):** the direct `Patient`/`PatientStatusLog` writes from `therapySessionsService.ts` described above have been replaced with calls to `patientLifecycleService.transitionPatientStatus`, per the boundary-strengthening work described in §12–14 (step 1 of §14's sequence is now done). `sessionType` propagation itself (CLAUDE.md rule #1, `context.md` §9) is a separate, still-relevant invariant unaffected by this change — see §6.1.
 
 ---
 
@@ -160,7 +160,8 @@ These are invariants the current implementation enforces (or documents) today. P
 2. **Patient lifecycle transitions** (verified in `frontend/src/constants/statuses.ts` and `SPEC.md` §3):
    - Automatic (driven by session events, inside a transaction): `created → discovery_scheduled` (discovery call scheduled), `discovery_scheduled → discovery_completed` (discovery call completed), `discovery_completed → started_therapy` (first therapy session scheduled).
    - Manual (staff-initiated): `started_therapy → schedule_completed | therapy_paused | patient_dropped`; `therapy_paused → started_therapy | patient_dropped`.
-   - Auto-advance triggers only when the *current* status matches the expected precondition (e.g., scheduling a therapy session for a patient who is not `discovery_completed` does not advance status) — verified in `therapySessionsService.ts` (`if (sessionType === "discovery" && patient.currentStatus === "created")`, etc.).
+   - Auto-advance triggers only when the *current* status matches the expected precondition (e.g., scheduling a therapy session for a patient who is not `discovery_completed` does not advance status) — this precondition check still lives in `therapySessionsService.ts` (`if (sessionType === "discovery" && patient.currentStatus === "created")`, etc.); it gates *whether Scheduling calls* the lifecycle capability at all.
+   - **As of 2026-08-30, transition legality is additionally validated centrally** by `patientLifecycleService.transitionPatientStatus` against one `VALID_TRANSITIONS` map covering every edge above (manual and automatic) — the single authoritative implementation for both call paths. Previously, `PATCH /patients/:id/status` (the manual path) performed no legality check at all and would accept any enum value for `new_status` regardless of the patient's current status; it now rejects an illegal transition with a `409`. This is a deliberate, in-scope tightening (the stated purpose of Phase 2 §12), not an incidental behavior change — flagged here because it is externally observable on that one endpoint.
 3. **Discovery vs. therapy is determined solely by `TherapySession.sessionType`.** There is no separate "is this a discovery booking" flag anywhere else in the system (SPEC.md §3, `context.md` §6).
 4. **Scheduling conflict rules:** a patient or a therapist cannot have two overlapping sessions unless one is `cancelled`, `rescheduled`, or `no_show` (`CONFLICT_EXCLUDED_STATUSES` in `therapySessionsService.ts`). Enforced at the application layer via a `findFirst` overlap query inside the same transaction as the write — **not** enforced by a database constraint (see §11 for the concurrency implication).
 5. **Session lifecycle:** a session has status `upcoming | completed | cancelled | no_show | rescheduled`. Only `upcoming` sessions can be rescheduled (`rescheduleSession` throws 400 otherwise). Rescheduling marks the original `rescheduled` and creates a new `upcoming` session linked via `rescheduledFromId`.
@@ -236,13 +237,13 @@ Scalability for this system should come from: clear domain boundaries, efficient
 ## 11. Architectural Risks
 
 ### Current (present in the codebase today)
-- **`therapySessionsService.ts` is the largest and most central service (400 lines)** and already writes outside its own domain (Patient/PatientStatusLog) — the clearest candidate for becoming an orchestration/"god service" as more session-triggered side effects are added.
-- **Patient lifecycle logic is distributed across two files** (`patientsService.ts` for manual transitions, `therapySessionsService.ts` for automatic ones) with no shared entry point — see §5.
+- **`therapySessionsService.ts` is the largest and most central service (~400 lines)** — the clearest candidate for becoming an orchestration/"god service" as more session-triggered side effects are added. As of 2026-08-30 it no longer writes `Patient`/`PatientStatusLog` directly (see §5), which removes one source of that risk but doesn't eliminate the file's overall size/centrality.
+- ~~Patient lifecycle logic is distributed across two files with no shared entry point.~~ **Resolved 2026-08-30** — both the manual (`patientsService.ts`) and automatic (`therapySessionsService.ts`) paths now call the single `patientLifecycleService.transitionPatientStatus` entry point. See §5.
 - **Database access is not isolated by domain.** Every service can query/write any table through the shared Prisma client; nothing technical prevents a new service from repeating the §5 pattern in a new place.
 - **No automated module-boundary enforcement** (lint rule, dependency-cruiser, or similar) exists to keep the current clean layering from eroding as more code is added.
 - **Large frontend pages**: `PatientProfilePage.tsx` (951 lines), `ScheduleListPage.tsx` (689 lines) mix data-fetching, mutation handling, and duplicated mobile/desktop JSX (§9).
 - **`any`-typed Prisma query clauses**: `listSessions` and `getTherapistSessions` in `therapySessionsService.ts` build their `where` object as `any`, bypassing Prisma's generated types — a schema/field rename would not be caught at compile time here.
-- **No automated test suite exists.** Verified: no `*.test.ts`/`*.spec.ts` files in `backend/src` or `frontend/src`, and no `test` script in either `package.json`. The invariants in §6 are currently protected only by code review and manual QA (per `PROJECT_MEMORY.md` §8b's manual smoke-test list).
+- **No automated test suite exists for most of the codebase.** As of 2026-08-30, `backend/src/services/__tests__/` (vitest, `npm test` in `backend/`) covers the Patient Lifecycle boundary specifically, against an in-memory Prisma double (the repo has no test database wired up). Everything else is still protected only by code review and manual QA (per `PROJECT_MEMORY.md` §8b's manual smoke-test list) — no frontend tests, no tests for `sessionType` propagation, conflict detection, or any other invariant in §6.
 - **A business invariant (discovery-call notes required on completion) currently appears to be enforced only in the frontend** (`context.md` §7), not verified at the backend/validator layer — this should be confirmed and, if true, is a gap between "business invariant" and "enforced invariant."
 - **Scheduling has no database-level uniqueness/exclusion constraint** backing the overlap-conflict rule (§7) — it is entirely an application-level `findFirst` check.
 
@@ -255,7 +256,7 @@ Scalability for this system should come from: clear domain boundaries, efficient
 
 ## 12. Target Architecture
 
-Recommended direction for the next 2–3 years — **still a modular monolith**, with domain ownership made explicit in code rather than implied by file naming. This is a target, not a plan being executed now.
+Recommended direction for the next 2–3 years — **still a modular monolith**, with domain ownership made explicit in code rather than implied by file naming. Most of this remains a target, not implemented; the one exception is the Patient Lifecycle boundary below, implemented 2026-08-30.
 
 ```
                          ┌─────────────────────────────┐
@@ -281,7 +282,7 @@ Recommended direction for the next 2–3 years — **still a modular monolith**,
 
 *Billing remains fields on `TherapySession` (as today) unless a future requirement (e.g., invoicing, multiple charges per session) justifies extracting it.
 
-**Core principle for cross-domain operations:** a domain that needs to change another domain's owned state should call an explicit, public operation on that domain's service — not write the table directly. Concretely: **Scheduling should invoke a patient-lifecycle operation (e.g., `patientsService.applyLifecycleEvent(tx, patientId, event)`) rather than directly setting `Patient.currentStatus` and inserting `PatientStatusLog` itself.** The Prisma transaction (`tx`) is still threaded through from Scheduling so atomicity is preserved (§7) — what changes is *who owns the decision logic*, not the transactional mechanics.
+**Core principle for cross-domain operations:** a domain that needs to change another domain's owned state should call an explicit, public operation on that domain's service — not write the table directly. **Implemented 2026-08-30:** Scheduling invokes `patientLifecycleService.transitionPatientStatus(tx, patientId, toStatus, changedByName, notes)` rather than directly setting `Patient.currentStatus` and inserting `PatientStatusLog` itself. The Prisma transaction (`tx`) is still threaded through from Scheduling so atomicity is preserved (§7) — what changed is *who owns the decision logic*, not the transactional mechanics.
 
 Domain module folders (`modules/patients/`, `modules/scheduling/`, etc., each with one `index.ts` public surface) are a reasonable future step once there's a second or third case needing the same boundary discipline — not required to introduce the pattern above for the one seam that exists today.
 
@@ -313,10 +314,10 @@ Rules to follow when implementing future features in this codebase:
 
 ## 14. Evolution / Migration Strategy
 
-Recommended incremental sequence for evolving the current codebase. **None of this is being implemented as part of this document** — it is a sequencing reference for future work.
+Recommended incremental sequence for evolving the current codebase. **Step 1 was implemented 2026-08-30 (Phase 2)**; the remaining steps are not implemented — this stays a sequencing reference for future work.
 
-1. Centralize patient-lifecycle logic — give Patients a single public operation for lifecycle transitions; have Scheduling call it instead of writing `Patient`/`PatientStatusLog` directly (addresses §5, §11).
-2. Protect critical business invariants (§6) with automated tests — there are currently none; start with the invariants most tied to historical bugs (`sessionType` propagation, conflict detection, status auto-advance).
+1. ~~Centralize patient-lifecycle logic — give Patients a single public operation for lifecycle transitions; have Scheduling call it instead of writing `Patient`/`PatientStatusLog` directly (addresses §5, §11).~~ **Done 2026-08-30** — `patientLifecycleService.transitionPatientStatus`, see §5, §6.2, §12.
+2. Protect critical business invariants (§6) with automated tests — a minimal `vitest` suite now covers the Patient Lifecycle boundary specifically (transition validity, precondition-gated auto-advance, audit logging, transaction rollback — see `backend/src/services/__tests__/`); `sessionType` propagation and conflict detection remain untested. This is the next candidate, not done as part of this step.
 3. Reduce `therapySessionsService.ts`'s responsibility as step 1 lands — it should end up owning session lifecycle and conflict detection only, not patient state.
 4. Improve database typing (`Prisma.TherapySessionWhereInput` instead of `any`, §11) and evaluate whether stronger DB constraints (index or `EXCLUDE` constraint for the conflict invariant, §7/§11) are warranted based on actual query patterns.
 5. Decompose large frontend pages (§9) incrementally — extract page-scoped data/mutation hooks the next time either large page is touched for a feature, not as a standalone refactor.

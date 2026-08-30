@@ -174,6 +174,72 @@ Auth + RBAC deployed to production. Live URLs: frontend `https://numa-mindcare.v
 - Verified post-deploy with a fresh, cookie-empty browser context: `fetch('/api/v1/auth/login', ...)` and `fetch('/api/v1/auth/me', ...)` both resolved at `numa-mindcare.vercel.app` (not `onrender.com`), and a full page reload after login rendered the dashboard directly with no redirect loop.
 - Backend `cors()`/cookie config (`backend/src/app.ts`, `backend/src/auth/cookies.ts`) was left unchanged — still correct as a fallback for any direct (non-proxied) call to the backend, and harmless now that the cookie is first-party via the proxy path.
 
+## 8d. Patient Lifecycle capability — backend boundary refactor (2026-08-30)
+
+**What changed.** Introduced `backend/src/services/patientLifecycleService.ts` with a single
+exported function, `transitionPatientStatus(tx, patientId, toStatus, changedByName, notes?)`,
+that centralizes Patient lifecycle transitions: validating whether `fromStatus → toStatus` is a
+legal transition (against one `VALID_TRANSITIONS` map covering both manual and automatic edges),
+updating `Patient.currentStatus`, and creating the `PatientStatusLog` row. It always requires an
+existing Prisma transaction client from the caller and never opens its own.
+
+- `patientsService.updatePatientStatus` (manual, staff-initiated transitions from the patient
+  profile) now wraps a call to `transitionPatientStatus` in its own `prisma.$transaction`, instead
+  of updating `Patient`/`PatientStatusLog` inline.
+- `therapySessionsService.createSession` and `.completeSession` (automatic, session-event-driven
+  transitions) now call `transitionPatientStatus(tx, ...)` with the same `tx` the session write
+  itself uses, instead of writing `Patient`/`PatientStatusLog` directly inline. The
+  `sessionType`/current-status precondition checks that gate *whether* an automatic transition is
+  even attempted (e.g. "only advance `created → discovery_scheduled` if scheduling a discovery
+  call") stayed in `therapySessionsService.ts`, unchanged — Scheduling still decides *when*;
+  Patient Lifecycle now owns *whether it's legal* plus the mutation and audit log.
+
+**Why.** This was the top-priority seam flagged in `ARCHITECTURE.md` §5/§11/§14 (step 1 of its
+evolution sequence): `therapySessionsService.ts` was writing directly into `Patient`/
+`PatientStatusLog`, tables it doesn't own, duplicating lifecycle-transition logic that also lived
+independently in `patientsService.ts` with no shared entry point and no transition-legality
+validation at all on the manual path.
+
+**Architectural rationale.** Scheduling now calls a Patients-owned public operation instead of
+reaching into Patients' tables directly — the one sanctioned cross-service import in the codebase
+(see `ARCHITECTURE.md` §2). The capability lives inside the existing `services/*.ts` convention
+(no new module/folder), and accepts the caller's `tx` rather than opening its own, so the existing
+atomicity guarantees are unchanged: session create/complete + lifecycle transition + audit log
+remain one transaction, exactly as before.
+
+**Behavior change (in-scope, not incidental):** before this change, `PATCH /patients/:id/status`
+performed no transition-legality check — it accepted any `PatientStatus` enum value regardless of
+the patient's current status. It now rejects an illegal transition with `409 Conflict`. This is
+the explicit point of centralizing validation (SPEC.md §3's lifecycle diagram) and brings the
+backend in line with what the frontend's `STATUS_TRANSITIONS` map already restricted via the UI —
+flagged here as the one externally observable behavior change from this refactor, not a
+regression.
+
+**Tests added.** The repo previously had zero automated tests (`ARCHITECTURE.md` §11). Added
+`vitest` as a dev dependency (`npm test` in `backend/`) and
+`backend/src/services/__tests__/{patientLifecycleService,patientsService,therapySessionsService}.test.ts`,
+covering: every valid manual/automatic transition, representative invalid transitions, the
+precondition gate on automatic transitions (no advance when current status doesn't match),
+`PatientStatusLog` audit content, `sessionType` preservation on reschedule, and that a mid-
+transaction failure rolls back both the session and the patient-status change. Since there's no
+test database wired up, `backend/src/services/__tests__/fakePrisma.ts` is a small in-memory
+double for the Prisma operations these services call (including `$transaction` with snapshot/
+restore rollback semantics) — not a full Prisma reimplementation, and not a substitute for
+real integration tests against Postgres if a test database is set up later.
+
+**Implementation locations:**
+- `backend/src/services/patientLifecycleService.ts` (new)
+- `backend/src/services/patientsService.ts` (`updatePatientStatus` simplified to delegate)
+- `backend/src/services/therapySessionsService.ts` (`createSession`/`completeSession` delegate)
+- `backend/src/services/__tests__/` (new — `fakePrisma.ts`, three `*.test.ts` files)
+- `backend/package.json` (`vitest` dev dependency, `test` script)
+
+**Caveats / remaining risk.** No API contract, endpoint structure, frontend, payment behavior, or
+scheduling-conflict logic changed. `sessionType` propagation on `rescheduleSession` was verified
+unchanged (still explicit, still copied from the original) and is now covered by a test. The
+known concurrency risk in scheduling-conflict detection (`ARCHITECTURE.md` §7/§11) is untouched by
+this change and remains open.
+
 ## 9. Local dev quick-start
 
 ```bash
