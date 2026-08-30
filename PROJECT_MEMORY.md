@@ -139,7 +139,7 @@ Last handful of commits (newest first):
 5. `067000a` — `context.md` added for session bootstrapping (that file is now one release behind — doesn't mention analytics/availability/clinicalNotes/billing/dashboard modules, which already exist in the code).
 6. Before that: the discovery-call workflow feature and its bug-fix chain (`031f8e4`, `877e98`, `02c8de1`, `3877e98` etc.) — fully documented in `context.md` §9.
 
-**Working theory of current state:** functionally complete-ish MVP (patients, sessions, team, availability, clinical notes, billing/analytics) with a UI/UX visual pass finished, and authentication + RBAC now implemented, locally validated, and deployed to production (see §8a and the 2026-08-30 production deployment entry below). No visible in-progress feature branch — `main` is the only branch fetched. Good candidates for "what's next": reconciling `context.md` with the newer modules (it still predates auth and several other modules), adding a second real role beyond `admin`, or picking up whatever the user intended next (ask them).
+**Working theory of current state:** functionally complete-ish MVP (patients, sessions, team, availability, clinical notes, billing/analytics) with a UI/UX visual pass finished, and authentication + RBAC now implemented, locally validated, and deployed to production (see §8a and §8b). No visible in-progress feature branch — `main` is the only branch fetched. Good candidates for "what's next": reconciling `context.md` with the newer modules (it still predates auth and several other modules), adding a second real role beyond `admin`, or picking up whatever the user intended next (ask them).
 
 ## 8a. Authentication & RBAC (added 2026-08-30)
 
@@ -151,7 +151,17 @@ Username/password auth + centralized permission-based RBAC, built on the previou
 - **Bootstrap admin:** `username: admin`, seeded by `backend/prisma/seed.ts` (skips if already exists — never overwrites a changed password). Locked-out recovery: `npm run reset-admin-password` (backend/src/scripts/resetAdminPassword.ts) — no HTTP reset endpoint exists.
 - **Frontend:** `frontend/src/auth/AuthContext.tsx` (calls `/auth/me` on load), `ProtectedRoute` component wraps every route in `App.tsx` except `/login`, permission-aware hiding on the primary "create" buttons (Patients/Team/Schedule) via `hasPermission()`.
 - **New required env var:** `JWT_SECRET` (backend/.env, and Render dashboard for production — `render.yaml` declares it `sync: false`). Also `FRONTEND_URL` for CORS (comma-separated if multiple origins).
-- **Schema change:** `User` gained `username` (unique, login identifier) and `passwordChangedAt`; `email` became optional. Migration: `20260830000000_add_user_auth_fields` — hand-written (no local `DATABASE_URL` was available to run `prisma migrate dev`), applies via Render's existing `preDeployCommand` or manual `prisma migrate deploy`.
+- **Schema change:** `User` gained `username` (unique, login identifier) and `passwordChangedAt`; `email` became optional. Migration: `20260830000000_add_user_auth_fields` — hand-written, includes a guard that aborts loudly instead of corrupting data if `users` is ever non-empty when applied.
+
+## 8b. Production deployment (2026-08-30)
+
+Auth + RBAC deployed to production. Live URLs: frontend `https://numa-mindcare.vercel.app`, backend `https://numa-mindcare.onrender.com`. All 7 mandatory smoke tests passed (login page, admin login, refresh persistence, patient data load, logout + direct-URL redirect, invalid-login generic message, bootstrap password changed and old password rejected).
+
+**Standing limitation — `render.yaml`'s `preDeployCommand` does not run on Render's Free plan.** `npx prisma migrate deploy` is declared there but Free-tier services silently skip it (Pre-Deploy Command, Web Shell, and One-Off Jobs are all Starter-plan-or-above features — confirmed directly in the Render dashboard, both gated behind the same upgrade prompt). This means **every future schema migration must be applied manually** by running `prisma migrate deploy` from a local machine against the production `DATABASE_URL` (copy it from Render dashboard → Environment → reveal `DATABASE_URL`) before/after pushing the migration — it will not happen automatically. Upgrading to Render's Starter plan would fix this properly.
+
+**Also found during this deployment (config-only, not app bugs):**
+- Render env var `NODE_ENV=production` makes `npm install` skip devDependencies during the *build* step too (not just at runtime), which broke `tsc` (`@types/express`/`@types/node` missing). Fixed by changing the build command to `npm install --include=dev && npx prisma generate && npm run build` (both in `render.yaml` and the service's dashboard Settings — the dashboard value doesn't auto-resync from `render.yaml` on every push, so if `render.yaml`'s build/start commands ever change again, update the dashboard Settings too or confirm this service is properly Blueprint-synced).
+- Seeding the bootstrap admin must NOT be done by running the full `prisma/seed.ts` in production — it also creates 10 demo team members/patients/sessions. Bootstrap-only admin creation was done with a small temporary script (not committed) that duplicated just the idempotent admin-create block from `seed.ts`.
 
 ## 9. Local dev quick-start
 
