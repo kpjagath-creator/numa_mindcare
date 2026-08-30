@@ -104,4 +104,35 @@ describe("transitionPatientStatus (Patient Lifecycle capability)", () => {
     expect(db.patients.get(14)!.currentStatus).toBe("created");
     expect(db.statusLogs).toHaveLength(0);
   });
+
+  // Caveat: FakeDb has no real MVCC/row-locking — its operations are synchronous JS, so this
+  // doesn't reproduce Postgres's actual interleaving or prove anything about real concurrent
+  // connections. What it *does* verify is the compare-and-swap contract the fix relies on: the
+  // update is conditioned on the status each call actually validated against, not just the id, so
+  // two conflicting transitions racing off the same starting state can't both silently succeed.
+  // Confidence in the real-database behavior comes from Postgres's documented Read Committed
+  // semantics (a blocked UPDATE re-evaluates its WHERE clause against the row as of the
+  // transaction that unblocked it), not from this test.
+  it("under two conflicting concurrent transitions from the same state, exactly one succeeds and the log/state stay consistent", async () => {
+    seedPatient(15, "started_therapy");
+
+    const [toPaused, toDropped] = await Promise.allSettled([
+      transitionPatientStatus(tx, 15, "therapy_paused", "staff-a"),
+      transitionPatientStatus(tx, 15, "patient_dropped", "staff-b"),
+    ]);
+
+    const outcomes = [toPaused.status, toDropped.status];
+    expect(outcomes.filter((s) => s === "fulfilled")).toHaveLength(1);
+    expect(outcomes.filter((s) => s === "rejected")).toHaveLength(1);
+
+    const rejected = toPaused.status === "rejected" ? toPaused : (toDropped as PromiseRejectedResult);
+    expect(rejected.reason).toMatchObject({ statusCode: 409 });
+
+    // Final state matches whichever transition actually won, and the log has exactly one entry —
+    // no duplicate/inconsistent history from the loser.
+    const finalStatus = db.patients.get(15)!.currentStatus;
+    expect(["therapy_paused", "patient_dropped"]).toContain(finalStatus);
+    expect(db.statusLogs).toHaveLength(1);
+    expect(db.statusLogs[0]).toMatchObject({ patientId: 15, previousStatus: "started_therapy", newStatus: finalStatus });
+  });
 });

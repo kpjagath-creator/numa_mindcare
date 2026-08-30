@@ -240,6 +240,32 @@ unchanged (still explicit, still copied from the original) and is now covered by
 known concurrency risk in scheduling-conflict detection (`ARCHITECTURE.md` §7/§11) is untouched by
 this change and remains open.
 
+**Post-implementation correction (2026-08-30): concurrency-safe transition write.** A follow-up
+review of this same commit found that `transitionPatientStatus`'s original write was a plain
+`patient.update({ where: { id } })` — unconditional on the status it had just validated against.
+Under Postgres's Read Committed isolation, two concurrent conflicting transitions from the same
+starting status (e.g. `started_therapy → therapy_paused` and `started_therapy → patient_dropped`
+firing at the same time) could both pass validation against their own stale read, and the second
+writer — once unblocked by the first writer's commit — would re-evaluate its `id`-only `WHERE`
+clause against the *new* row and blindly overwrite it, producing a non-deterministic final status
+plus two `PatientStatusLog` rows that both claim `previousStatus: "started_therapy"` even though
+only one of them was still true. Being inside a `$transaction` did not prevent this, since the
+transaction only guaranteed atomicity of the write, not correctness of the check-then-act sequence
+across concurrent transactions.
+
+**Fix.** The update is now a conditional (compare-and-swap) `patient.updateMany({ where: { id,
+currentStatus: fromStatus }, data: { currentStatus: toStatus } })`. If `count === 0`, another
+transition already changed the row since the read — the current status is re-fetched and the
+transition is rejected as invalid (`409`), rather than silently overwritten. No locking
+infrastructure, event system, or CQRS was introduced; the fix is expressed entirely through
+Prisma's existing query API, and the `patientLifecycleService.ts` → `patientsService.ts` /
+`therapySessionsService.ts` transaction boundary is unchanged. A focused test in
+`patientLifecycleService.test.ts` fires two conflicting transitions concurrently via
+`Promise.allSettled` and asserts exactly one succeeds, the other gets `409`, and exactly one
+`PatientStatusLog` row is written — this proves the compare-and-swap contract holds against the
+fake Prisma double, not Postgres's actual row-locking/MVCC behavior, which is relied on as
+documented rather than re-tested here.
+
 ## 9. Local dev quick-start
 
 ```bash

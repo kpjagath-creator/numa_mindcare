@@ -207,6 +207,13 @@ Both the automatic and manual transitions above are now applied by one function:
 - **Transaction requirement:** `transitionPatientStatus` never opens its own transaction — it
   always requires an existing `tx` from the caller. Do not call it with the top-level `prisma`
   client.
+- **Concurrency safety:** the write is a conditional `patient.updateMany({ where: { id,
+  currentStatus: fromStatus }, ... })`, not a plain `patient.update({ where: { id } })` — the
+  update only applies if the row's status still matches what was just validated. If another
+  transition committed in between (`count === 0`), the current status is re-fetched and the
+  transition is rejected as invalid rather than silently overwriting a concurrent write. Do not
+  revert this to an unconditional `update` — see `PROJECT_MEMORY.md` §8d's 2026-08-30 addendum for
+  the race it closes.
 - **Behavior change to be aware of:** before this change, `PATCH /patients/:id/status` accepted
   any `PatientStatus` enum value regardless of the patient's current status (no legality check
   existed on the manual path). It now rejects an illegal transition with `409`. This was the

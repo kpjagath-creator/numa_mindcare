@@ -124,9 +124,12 @@ function withParticipants(db: FakeDb, s: FakeSession) {
 export function createFakeClient(db: FakeDb): any {
   const client: any = {
     patient: {
-      findUnique: async ({ where }: any) => {
+      findUnique: async ({ where, include }: any) => {
         const p = db.patients.get(where.id);
-        return p ? { ...p } : null;
+        if (!p) return null;
+        const therapist =
+          include?.therapist && p.therapistId ? db.teamMembers.get(p.therapistId) ?? null : null;
+        return include?.therapist ? { ...p, therapist: therapist ? { ...therapist } : null } : { ...p };
       },
       update: async ({ where, data, include }: any) => {
         const existing = db.patients.get(where.id);
@@ -138,6 +141,18 @@ export function createFakeClient(db: FakeDb): any {
             ? db.teamMembers.get(updated.therapistId) ?? null
             : null;
         return { ...updated, therapist: therapist ? { ...therapist } : null };
+      },
+      // Simulates Postgres's conditional-UPDATE compare-and-swap: only mutates rows matching
+      // every plain-equality field in `where` (including a non-primary-key field like
+      // currentStatus), and reports how many rows actually matched — same contract as
+      // Prisma's real updateMany, which the lifecycle service relies on for concurrency safety.
+      updateMany: async ({ where, data }: any) => {
+        const existing = db.patients.get(where.id);
+        if (!existing) return { count: 0 };
+        const matches = Object.entries(where).every(([key, val]) => (existing as any)[key] === val);
+        if (!matches) return { count: 0 };
+        db.patients.set(where.id, { ...existing, ...data });
+        return { count: 1 };
       },
     },
     teamMember: {

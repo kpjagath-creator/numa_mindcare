@@ -67,11 +67,22 @@ export async function transitionPatientStatus(
     throw makeInvalidTransitionError(fromStatus, toStatus);
   }
 
-  const updated = await tx.patient.update({
-    where: { id: patientId },
+  // Conditional (compare-and-swap) update: only applies if currentStatus is still what we just
+  // validated against. Under concurrent transitions, Postgres's Read Committed semantics mean a
+  // plain `update({ where: { id } })` would blindly overwrite whatever committed in between —
+  // this `where` clause makes the write itself the concurrency check, so a transition that raced
+  // and lost re-reads the real current status and fails as an invalid transition instead of
+  // silently clobbering it (and double-logging an inconsistent history).
+  const result = await tx.patient.updateMany({
+    where: { id: patientId, currentStatus: fromStatus },
     data: { currentStatus: toStatus },
-    include: { therapist: { select: therapistSelect } },
   });
+
+  if (result.count === 0) {
+    const current = await tx.patient.findUnique({ where: { id: patientId } });
+    if (!current) throw makeNotFoundError(patientId);
+    throw makeInvalidTransitionError(current.currentStatus as PatientStatus, toStatus);
+  }
 
   await tx.patientStatusLog.create({
     data: {
@@ -82,6 +93,12 @@ export async function transitionPatientStatus(
       notes: notes ?? null,
     },
   });
+
+  const updated = await tx.patient.findUnique({
+    where: { id: patientId },
+    include: { therapist: { select: therapistSelect } },
+  });
+  if (!updated) throw makeNotFoundError(patientId);
 
   return updated as unknown as Patient;
 }
