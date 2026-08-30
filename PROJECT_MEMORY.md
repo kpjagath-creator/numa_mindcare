@@ -22,7 +22,7 @@ Repo: https://github.com/kpjagath-creator/numa_mindcare (cloned to `D:\NMC\numa_
 | Backend hosting | Render (Blueprint defined in root `render.yaml`; `npx prisma migrate deploy` runs as a `preDeployCommand` before each deploy, then `node build/app.js` starts the server) |
 | Local ports | backend `:3001`, frontend `:5173` (Vite proxies `/api/v1` → `:3001` in dev) |
 
-No auth is wired into the frontend yet, but a `User` model (email/passwordHash/role/teamMemberId) exists in the Prisma schema — looks like login/RBAC was scaffolded but not built out.
+Username/password auth + centralized permission-based RBAC is wired in on both frontend and backend — see §8a.
 
 ## 3. Repository layout
 
@@ -75,14 +75,17 @@ numa_mindcare/
 - **TherapistAvailability** — weekly recurring slots per therapist (dayOfWeek 0–6, startTime/endTime as "HH:MM" strings).
 - **TherapistBlockout** — one-off blocked dates (leave/holiday) per therapist.
 - **ClinicalNote** — free-form (not SOAP-structured) notes attached to a session, with `createdByName`.
-- **User** — email/passwordHash/role/teamMemberId — scaffolded, not currently used by the frontend (no login screens in `App.tsx`).
+- **User** — `username` (unique, login identifier), `email` (optional), `passwordHash`, `role`, `teamMemberId`, `passwordChangedAt`, `isActive`. Backs username/password auth as of 2026-08-30 — see §8a.
 
 Migration history (`backend/prisma/migrations/`): init → add therapist-to-patient → add therapy sessions → add session status/duration → add session charges → add availability/reschedule/no-show/notes/payment → add session_type. This last migration is the one `context.md` documents in depth (it's the source of several "discovery vs therapy session" bugs that got fixed).
 
 ## 5. Backend API surface (`/api/v1`)
 
+All routes below `/api/v1` except `/auth/login` require an authenticated session (see §8a); each route also declares a specific permission via `requirePermission`.
+
 | Resource | Base path | Notes |
 |---|---|---|
+| Auth | `/auth` | `POST /login` (public), `POST /logout`, `GET /me`, `POST /change-password` |
 | Patients | `/patients` | CRUD + `PATCH /:id/status`, `PATCH /:id/therapist`, `GET /:id/status-logs` |
 | Team members | `/team-members` | CRUD-ish + `GET /:id/patients` |
 | Therapy sessions | `/therapy-sessions` | create/list/get/delete + `/:id/cancel`, `/:id/complete`, `/:id/reschedule`, `/:id/no-show`, `/:id/payment-status`, `/therapist/:id` |
@@ -136,7 +139,19 @@ Last handful of commits (newest first):
 5. `067000a` — `context.md` added for session bootstrapping (that file is now one release behind — doesn't mention analytics/availability/clinicalNotes/billing/dashboard modules, which already exist in the code).
 6. Before that: the discovery-call workflow feature and its bug-fix chain (`031f8e4`, `877e98`, `02c8de1`, `3877e98` etc.) — fully documented in `context.md` §9.
 
-**Working theory of current state:** functionally complete-ish MVP (patients, sessions, team, availability, clinical notes, billing/analytics) with a UI/UX visual pass just finished. No visible in-progress feature branch — `main` is the only branch fetched. Good candidates for "what's next": wiring up the scaffolded `User`/auth model, reconciling `context.md` with the newer modules, or picking up whatever the user intended before stepping away (ask them).
+**Working theory of current state:** functionally complete-ish MVP (patients, sessions, team, availability, clinical notes, billing/analytics) with a UI/UX visual pass finished, and authentication + RBAC now implemented, locally validated, and deployed to production (see §8a and the 2026-08-30 production deployment entry below). No visible in-progress feature branch — `main` is the only branch fetched. Good candidates for "what's next": reconciling `context.md` with the newer modules (it still predates auth and several other modules), adding a second real role beyond `admin`, or picking up whatever the user intended next (ask them).
+
+## 8a. Authentication & RBAC (added 2026-08-30)
+
+Username/password auth + centralized permission-based RBAC, built on the previously-unused `User` model.
+
+- **Auth:** JWT in an httpOnly cookie (`numa_session`), not localStorage — signed/verified in `backend/src/auth/jwt.ts`, 12h expiry. `SameSite=None; Secure` in production (Vercel↔Render is cross-site), `Lax`/non-secure in dev (Vite proxy makes it same-origin). `User.passwordChangedAt` invalidates old tokens on password change without needing a session table.
+- **RBAC:** centralized Role→Permission map in `backend/src/auth/permissions.ts` (`resource:action` strings, e.g. `patients:create`). Routes declare `requirePermission("...")` per-endpoint; nothing checks `role === "admin"` directly. Add a role by adding a key to `ROLE_PERMISSIONS` there — no other file needs to change.
+- **Middleware:** `requireAuth` (backend/src/middleware/requireAuth.ts) runs globally on `/api/v1/*` except `/auth/login`; `requirePermission` runs per-route on top of it.
+- **Bootstrap admin:** `username: admin`, seeded by `backend/prisma/seed.ts` (skips if already exists — never overwrites a changed password). Locked-out recovery: `npm run reset-admin-password` (backend/src/scripts/resetAdminPassword.ts) — no HTTP reset endpoint exists.
+- **Frontend:** `frontend/src/auth/AuthContext.tsx` (calls `/auth/me` on load), `ProtectedRoute` component wraps every route in `App.tsx` except `/login`, permission-aware hiding on the primary "create" buttons (Patients/Team/Schedule) via `hasPermission()`.
+- **New required env var:** `JWT_SECRET` (backend/.env, and Render dashboard for production — `render.yaml` declares it `sync: false`). Also `FRONTEND_URL` for CORS (comma-separated if multiple origins).
+- **Schema change:** `User` gained `username` (unique, login identifier) and `passwordChangedAt`; `email` became optional. Migration: `20260830000000_add_user_auth_fields` — hand-written (no local `DATABASE_URL` was available to run `prisma migrate dev`), applies via Render's existing `preDeployCommand` or manual `prisma migrate deploy`.
 
 ## 9. Local dev quick-start
 
@@ -145,7 +160,9 @@ Last handful of commits (newest first):
 cd backend
 npm install
 npx prisma generate
-npm run dev            # nodemon + ts-node, port 3001, needs DATABASE_URL in backend/.env
+# backend/.env needs DATABASE_URL and JWT_SECRET (see .env.example) — JWT_SECRET
+# is required at import time (backend/src/auth/jwt.ts throws if unset)
+npm run dev            # nodemon + ts-node, port 3001
 
 # frontend
 cd frontend

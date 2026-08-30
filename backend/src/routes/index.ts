@@ -7,8 +7,17 @@ import therapySessionsRouter from "./therapySessions";
 import analyticsRouter from "./analytics";
 import availabilityRouter from "./availability";
 import clinicalNotesRouter from "./clinicalNotes";
+import authRouter from "./auth";
+import { requireAuth } from "../middleware/requireAuth";
 
 const v1Router = Router();
+
+// /auth is the only public resource group (login must be reachable while
+// unauthenticated; the other /auth routes enforce requireAuth themselves).
+v1Router.use("/auth", authRouter);
+
+// Everything below requires an established session.
+v1Router.use(requireAuth);
 
 v1Router.use("/patients", patientsRouter);
 v1Router.use("/team-members", teamMembersRouter);

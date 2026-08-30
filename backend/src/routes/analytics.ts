@@ -2,10 +2,11 @@
 
 import { Router } from "express";
 import { dashboardStats, revenueStats } from "../controllers/analyticsController";
+import { requirePermission } from "../middleware/requirePermission";
 
 const router = Router();
 
-router.get("/dashboard", dashboardStats);
-router.get("/revenue",   revenueStats);
+router.get("/dashboard", requirePermission("analytics:read"), dashboardStats);
+router.get("/revenue",   requirePermission("analytics:read"), revenueStats);
 
 export default router;

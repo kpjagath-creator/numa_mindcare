@@ -15,6 +15,7 @@ import { listPatients } from "../../api/patients";
 import { listTeamMembers } from "../../api/teamMembers";
 import { useToast } from "../../components/ui/Toast";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { useAuth } from "../../auth/AuthContext";
 
 const LIMIT = 50;
 
@@ -61,6 +62,8 @@ function PaymentPill({ status }: { status: string }) {
 export default function ScheduleListPage() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreateSession = hasPermission("sessions:create");
   const [sessions, setSessions] = useState<TherapySession[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: LIMIT, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -522,7 +525,9 @@ export default function ScheduleListPage() {
         )}
 
         {/* FAB */}
-        <button className="fab" onClick={() => setShowModal(true)} title="Add new session">+</button>
+        {canCreateSession && (
+          <button className="fab" onClick={() => setShowModal(true)} title="Add new session">+</button>
+        )}
 
         {showModal && (
           <AddSessionModal onClose={() => setShowModal(false)} onCreated={() => { setShowModal(false); void fetchSessions(); }} />
@@ -548,7 +553,9 @@ export default function ScheduleListPage() {
         <span style={s.count}>
           {!loading && `${pagination.total} session${pagination.total !== 1 ? "s" : ""}`}
         </span>
-        <button style={s.primaryBtn} onClick={() => setShowModal(true)}>+ Add Schedule</button>
+        {canCreateSession && (
+          <button style={s.primaryBtn} onClick={() => setShowModal(true)}>+ Add Schedule</button>
+        )}
       </div>
 
       {/* ── Filters ── */}

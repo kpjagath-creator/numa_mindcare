@@ -8,13 +8,14 @@ import {
   getBlockouts,
   deleteBlockout,
 } from "../controllers/availabilityController";
+import { requirePermission } from "../middleware/requirePermission";
 
 const router = Router();
 
-router.put("/therapist/:id/slots", setAvailability);
-router.get("/therapist/:id/slots", getAvailability);
-router.post("/therapist/:id/blockouts", createBlockout);
-router.get("/therapist/:id/blockouts", getBlockouts);
-router.delete("/blockouts/:id", deleteBlockout);
+router.put("/therapist/:id/slots", requirePermission("availability:manage"), setAvailability);
+router.get("/therapist/:id/slots", requirePermission("availability:read"), getAvailability);
+router.post("/therapist/:id/blockouts", requirePermission("availability:manage"), createBlockout);
+router.get("/therapist/:id/blockouts", requirePermission("availability:read"), getBlockouts);
+router.delete("/blockouts/:id", requirePermission("availability:manage"), deleteBlockout);
 
 export default router;

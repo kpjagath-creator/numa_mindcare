@@ -11,16 +11,17 @@ import {
   deletePatient,
   getStatusLogs,
 } from "../controllers/patientsController";
+import { requirePermission } from "../middleware/requirePermission";
 
 const router = Router();
 
-router.post("/", registerPatient);
-router.get("/", listPatients);
-router.get("/:id", getPatient);
-router.put("/:id", updatePatientInfo);
-router.patch("/:id/status", updateStatus);
-router.patch("/:id/therapist", updateTherapist);
-router.delete("/:id", deletePatient);
-router.get("/:id/status-logs", getStatusLogs);
+router.post("/", requirePermission("patients:create"), registerPatient);
+router.get("/", requirePermission("patients:read"), listPatients);
+router.get("/:id", requirePermission("patients:read"), getPatient);
+router.put("/:id", requirePermission("patients:update"), updatePatientInfo);
+router.patch("/:id/status", requirePermission("patients:update"), updateStatus);
+router.patch("/:id/therapist", requirePermission("patients:update"), updateTherapist);
+router.delete("/:id", requirePermission("patients:delete"), deletePatient);
+router.get("/:id/status-logs", requirePermission("patients:read"), getStatusLogs);
 
 export default router;

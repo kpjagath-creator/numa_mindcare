@@ -139,15 +139,17 @@ model ClinicalNote {
 }
 
 model User {
-  id            Int        @id @default(autoincrement())
-  name          String
-  email         String     @unique
-  passwordHash  String     @map("password_hash")
-  role          String
-  teamMemberId  Int?       @map("team_member_id")
-  isActive      Boolean    @default(true) @map("is_active")
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
+  id                 Int        @id @default(autoincrement())
+  name               String
+  username           String     @unique
+  email              String?    @unique
+  passwordHash       String     @map("password_hash")
+  role               String
+  teamMemberId       Int?       @map("team_member_id")
+  isActive           Boolean    @default(true) @map("is_active")
+  passwordChangedAt  DateTime   @default(now()) @map("password_changed_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
 
   @@map("users")
 }

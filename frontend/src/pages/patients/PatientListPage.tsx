@@ -13,6 +13,7 @@ import { PATIENT_STATUSES, STATUS_LABELS } from "../../constants/statuses";
 import { listPatients, deletePatient } from "../../api/patients";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../components/ui/Toast";
+import { useAuth } from "../../auth/AuthContext";
 
 const LIMIT = 20;
 
@@ -27,6 +28,8 @@ export default function PatientListPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canCreatePatient = hasPermission("patients:create");
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta>({ page: 1, limit: LIMIT, total: 0 });
@@ -200,7 +203,9 @@ export default function PatientListPage() {
           </>
         )}
 
-        <button className="fab" onClick={() => navigate("/patients/new")} title="Register new patient">+</button>
+        {canCreatePatient && (
+          <button className="fab" onClick={() => navigate("/patients/new")} title="Register new patient">+</button>
+        )}
       </Layout>
     );
   }
@@ -237,9 +242,11 @@ export default function PatientListPage() {
             ))}
           </select>
         </div>
-        <button style={s.primaryBtn} onClick={() => navigate("/patients/new")}>
-          + Register Patient
-        </button>
+        {canCreatePatient && (
+          <button style={s.primaryBtn} onClick={() => navigate("/patients/new")}>
+            + Register Patient
+          </button>
+        )}
       </div>
 
       {error && <p style={s.error}>{error}</p>}

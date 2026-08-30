@@ -27,7 +27,7 @@ There are two kinds of sessions:
 | ORM | Prisma |
 | Database | PostgreSQL |
 | Frontend hosting | Vercel |
-| Backend hosting | Railway |
+| Backend hosting | Render |
 | Local dev (frontend) | `http://localhost:5173` |
 | Local dev (backend) | `http://localhost:3001` |
 
@@ -79,11 +79,11 @@ numa-mindcare/
 
 ## 4. Environment & API
 
-### Frontend `.env`
+### Frontend `.env.production`
 ```
-VITE_API_URL=https://numa-mindcare-backend-production.up.railway.app/api/v1
+VITE_API_URL=https://numa-mindcare.onrender.com/api/v1
 ```
-> **Important:** This means all API calls go to **Railway production** even during local dev, unless you create a `frontend/.env.local` with:
+> **Important:** This means all API calls go to **Render production** even during local dev, unless you create a `frontend/.env.local` with:
 > ```
 > VITE_API_URL=http://localhost:3001/api/v1
 > ```
@@ -544,7 +544,20 @@ VITE_API_URL=http://localhost:3001/api/v1
 4. Update `mapSession()` in `therapySessionsService.ts` if the new field needs to appear in API responses
 
 ### Deployment
-- Push to `main` → auto-deploys backend to Railway, frontend to Vercel
+- Push to `main` → auto-deploys backend to Render (runs `npx prisma migrate deploy` as a `preDeployCommand` before starting), frontend to Vercel
+
+---
+
+## 11a. Authentication & RBAC (added 2026-08-30)
+
+Username/password login + centralized permission-based RBAC, deployed to production. Full detail in `PROJECT_MEMORY.md` §8a — summary:
+
+- JWT in an httpOnly cookie (`numa_session`, 12h expiry), `SameSite=None; Secure` in production.
+- Centralized `resource:action` permission map in `backend/src/auth/permissions.ts` — routes declare `requirePermission("...")`, no scattered `role === "admin"` checks. Add a role by adding one entry there.
+- `requireAuth` runs globally on `/api/v1/*` except `/auth/login`; `requirePermission` runs per-route.
+- Bootstrap admin (`username: admin`) is seeded idempotently by `backend/prisma/seed.ts` — never overwrites an already-changed password. Locked-out recovery via `npm run reset-admin-password` (no HTTP reset endpoint).
+- Frontend: `AuthContext` + `ProtectedRoute` gate every route except `/login`; primary "create" buttons are permission-aware via `hasPermission()`.
+- New required env vars: `JWT_SECRET` (backend), `FRONTEND_URL` (backend, for CORS).
 
 ---
 

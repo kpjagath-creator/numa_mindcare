@@ -11,6 +11,7 @@ import type { TeamMember } from "../../types/index";
 import { listTeamMembers, deleteTeamMember } from "../../api/teamMembers";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../components/ui/Toast";
+import { useAuth } from "../../auth/AuthContext";
 
 // ── Uniform avatar color ───────────────────────────────────────────────────
 function roleAvatarColor(_employeeType: string): { bg: string; color: string } {
@@ -25,6 +26,8 @@ export default function TeamListPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canCreateTeamMember = hasPermission("team:create");
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,13 +155,15 @@ export default function TeamListPage() {
         )}
 
         {/* FAB for adding team member */}
-        <button
-          className="fab"
-          onClick={() => navigate("/team/new")}
-          title="Add team member"
-        >
-          +
-        </button>
+        {canCreateTeamMember && (
+          <button
+            className="fab"
+            onClick={() => navigate("/team/new")}
+            title="Add team member"
+          >
+            +
+          </button>
+        )}
       </Layout>
     );
   }
@@ -168,9 +173,11 @@ export default function TeamListPage() {
     <Layout title="Team">
       <div style={s.toolbar}>
         <span style={s.count}>{loading ? "" : `${members.length} member${members.length !== 1 ? "s" : ""}`}</span>
-        <button style={s.primaryBtn} onClick={() => navigate("/team/new")}>
-          + Add Team Member
-        </button>
+        {canCreateTeamMember && (
+          <button style={s.primaryBtn} onClick={() => navigate("/team/new")}>
+            + Add Team Member
+          </button>
+        )}
       </div>
 
       {error && <p style={s.error}>{error}</p>}

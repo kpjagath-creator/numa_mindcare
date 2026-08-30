@@ -9,3 +9,9 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: https://numa-mindcare.vercel.app
+      - key: NODE_ENV
+        value: production

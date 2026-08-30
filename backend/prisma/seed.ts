@@ -2,6 +2,7 @@
 // Run with: npx ts-node prisma/seed.ts
 
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/auth/password";
 
 const prisma = new PrismaClient();
 
@@ -32,6 +33,28 @@ async function genPatientNumber(tx: typeof prisma): Promise<string> {
 
 async function main() {
   console.log("🌱 Seeding database…\n");
+
+  // ── 0. Bootstrap admin user ─────────────────────────────────────────────
+  // Only creates the account if it doesn't already exist — never overwrites
+  // a password that an operator may have already changed via
+  // `npm run reset-admin-password` or the Change Password screen.
+
+  const existingAdmin = await prisma.user.findUnique({ where: { username: "admin" } });
+  if (existingAdmin) {
+    console.log("  skip  Admin user already exists");
+  } else {
+    const passwordHash = await hashPassword("admin@123");
+    await prisma.user.create({
+      data: {
+        name: "Admin",
+        username: "admin",
+        passwordHash,
+        role: "admin",
+        isActive: true,
+      },
+    });
+    console.log("  ✓  Admin user created (username: admin) — change the bootstrap password after first login");
+  }
 
   // ── 1. Team Members ────────────────────────────────────────────────────
 

@@ -8,13 +8,14 @@ import {
   removeTeamMember,
   getTeamMemberPatients,
 } from "../controllers/teamMembersController";
+import { requirePermission } from "../middleware/requirePermission";
 
 const router = Router();
 
-router.post("/", addTeamMember);
-router.get("/", listTeamMembers);
-router.get("/:id", getTeamMember);
-router.delete("/:id", removeTeamMember);
-router.get("/:id/patients", getTeamMemberPatients);
+router.post("/", requirePermission("team:create"), addTeamMember);
+router.get("/", requirePermission("team:read"), listTeamMembers);
+router.get("/:id", requirePermission("team:read"), getTeamMember);
+router.delete("/:id", requirePermission("team:delete"), removeTeamMember);
+router.get("/:id/patients", requirePermission("team:read"), getTeamMemberPatients);
 
 export default router;
