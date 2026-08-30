@@ -266,6 +266,108 @@ Prisma's existing query API, and the `patientLifecycleService.ts` → `patientsS
 fake Prisma double, not Postgres's actual row-locking/MVCC behavior, which is relied on as
 documented rather than re-tested here.
 
+## 8e. Priority capabilities 1–4: concurrency-safe booking, availability-aware scheduling, clinical note sign-off, patient timeline (2026-08-30)
+
+**What changed.** Implemented four approved capabilities in one pass, evaluated up front per the
+task's mandatory gate (classification: **PROCEED WITH MODIFICATIONS** — one genuine product-policy
+question on SCH-13 was escalated to the user before implementation; user chose to defer SCH-13
+entirely rather than pick a buffer value).
+
+**1. SCH-05 — concurrency-safe session booking.** The existing `findFirst` overlap check in
+`createSession`/`rescheduleSession` was a real check-then-act race under Postgres `READ
+COMMITTED` (documented as a known risk in `ARCHITECTURE.md` §7/§11 before this work). Fixed with
+two partial Postgres `EXCLUDE` constraints on `therapy_sessions` — `(patient_id, tsrange(start,
+end))` and `(team_member_id, tsrange(start, end))`, scoped to non-cancelled/rescheduled/no-show
+statuses (migration `20260830094335_add_session_overlap_exclusion`, requires `btree_gist`). The
+service layer catches the resulting `23P01` exclusion-violation and maps it to the same 409
+conflict shape the `findFirst` path already returns. No locking infrastructure, event system, or
+CQRS — a database constraint is the smallest mechanism that actually closes the race. Verified with
+genuine concurrent `Promise.allSettled` requests against a real local Postgres database (see 8e-i
+below), not just mocked.
+
+**Bug surfaced by the constraint, fixed in the same change:** `completeSession` unconditionally set
+`endTime: new Date()`. Completing a session dated in the future (e.g. a backdated/early completion)
+could produce `endTime < startTime` — previously a silent data-integrity gap, now a hard Postgres
+error (`22000 range lower bound must be less than or equal to range upper bound`) once the
+EXCLUDE constraint's `tsrange(start_time, end_time)` is evaluated on every write. Fixed by clamping:
+`endTime = now < session.startTime ? session.startTime : now`.
+
+**2. Availability-aware scheduling — SCH-04 (availability) + SCH-20 (blackouts); SCH-13 (buffer)
+deferred.** `TherapistAvailability`/`TherapistBlockout` existed with full CRUD but were never read
+during booking. Added `assertTherapistAvailable` in `therapySessionsService.ts`, checked in both
+`createSession` and `rescheduleSession` inside the same transaction as conflict detection: therapist
+must be `isActive`, the full session range must fit inside a weekly `TherapistAvailability` window
+for that day (boundary-inclusive; a session spanning past midnight is rejected outright since it
+can never fit one weekday's window), and the date must not have a `TherapistBlockout`. SCH-13 (a
+configurable minimum buffer between sessions) was explicitly **not implemented** — there was no
+existing buffer concept anywhere in the schema/code, and picking a default value (global vs.
+per-therapist, what number) is a genuine product-policy decision; escalated to the user via
+`AskUserQuestion`, who chose to skip it for this pass rather than invent a default. Frontend:
+`AddSessionModal.tsx` fetches the selected therapist's availability/blockouts and shows a live
+"available" / "not available" / "blocked" indicator — informational only; the backend independently
+re-validates on submit and is the sole source of truth (verified live: submitting into an
+unavailable slot returns the backend's own 409 message, not just a client-side block).
+
+**Operational note:** because this newly enforces "no availability configured → cannot be booked,"
+existing therapists in the seeded/production data with no `TherapistAvailability` rows will be
+unbookable until staff configures their weekly availability via the existing Team page UI. This is
+the intended, explicitly-requested behavior (SCH-04 says booking requires availability to exist),
+not a bug — flagged here so it isn't mistaken for a regression after deploy.
+
+**3. CLN-07 — clinical note sign-off / immutability.** `ClinicalNote` gained `status` ("draft" |
+"signed"), `signedAt`, `signedByName`; a new `ClinicalNoteAmendment` model (append-only, FK to
+`ClinicalNote`) holds post-signature follow-ups. `signNote` is a compare-and-swap transition
+(`updateMany({ where: { id, status: "draft" } })`) — the same pattern
+`patientLifecycleService.transitionPatientStatus` already established for this codebase — so two
+concurrent sign attempts on the same note can't both "win" (verified with a real concurrent test:
+exactly one succeeds, one gets 409, exactly one signature persists). `updateNote`/`deleteNote`
+reject a signed note with 409. `addAmendment` requires `status: "signed"` and never touches the
+original row. New `clinical_notes:sign` permission added to the centralized RBAC map (`admin` has
+it, same as every other permission today) — no scattered role checks. Frontend
+(`ClinicalNotesPanel.tsx`): draft notes show Edit/Sign; signing requires an explicit confirm step
+("locks this note permanently…"); signed notes render read-only with a signed badge, signer, and
+timestamp, plus an amendment list and add-amendment form gated on `clinical_notes:update`.
+
+**4. PAT-10 — staff patient timeline.** No new event table. `patientTimelineService.ts` (Patients
+domain, `GET /patients/:id/timeline`) runs three parallel bounded queries — `PatientStatusLog`,
+`TherapySession`, `ClinicalNote` (joined via `session.patientId`) — and composes them into one
+typed, chronologically sorted list (lifecycle / assignment / payment / session / clinical_note),
+with a fixed type-priority tie-break for identical timestamps so ordering is deterministic and
+reproducible across calls (covered by a dedicated test). `PatientStatusLog` is overloaded in this
+codebase (also used for `therapist_updated` and `payment_<status>` pseudo-transitions) — the
+timeline classifies those into their own `assignment`/`payment` entry types rather than showing them
+as lifecycle changes. Rendered as a new `PatientTimeline` component inside a `CollapsibleCard` on
+`PatientProfilePage.tsx`, added identically to both the mobile and desktop JSX branches (per
+CLAUDE.md rule #2). This is a strict performance improvement over the page's pre-existing behavior,
+not just "no worse": `PatientProfilePage.tsx` was already doing a real N+1 (one `getNotesForSession`
+call per session, sequentially awaited in a `for` loop, to build the existing "Clinical Notes"
+summary/count) — left untouched (out of scope, not redesigning the whole profile page), but the new
+Timeline data comes from one additional bounded request, not a loop.
+
+**8e-i. A real local test database now exists and is used.** `backend/.env`'s `DATABASE_URL`
+already pointed at a local Postgres (`numa_test`) with migrations applied — undocumented before this
+work. `ARCHITECTURE.md` previously stated flatly that "the repo has no test database wired up"; that
+was true of the *committed* test suite (which only ever exercised a fake Prisma double) but not of
+the actual local dev environment. Added `backend/src/services/__tests__/*.integration.test.ts`
+(therapy sessions, clinical notes, patient timeline) that run real queries — including genuine
+concurrent `Promise.allSettled` races — against this database, skipping gracefully via Vitest's
+`ctx.skip()` if it isn't reachable rather than failing the whole suite. `vitest.config.ts` now sets
+`fileParallelism: false` since these files share tables and were racing each other when run in
+parallel. This is now the strongest deterministic coverage practical for the concurrency invariants
+in Capabilities 1 and 3 — see CLAUDE.md rule #10.
+
+**Files changed:** `backend/prisma/schema.prisma` + 2 new migrations; `backend/src/services/{therapySessionsService,clinicalNotesService,patientTimelineService,patientsService*}.ts`
+(*only wiring the new route, no logic change); `backend/src/{controllers,routes,validators}/{therapySessions,clinicalNotes,patients}*`;
+`backend/src/auth/permissions.ts`; `backend/src/types/index.ts`; `backend/vitest.config.ts`; 6 new/updated test files;
+`frontend/src/components/schedule/{AddSessionModal,ClinicalNotesPanel}.tsx`; `frontend/src/components/patients/PatientTimeline.tsx` (new);
+`frontend/src/pages/patients/PatientProfilePage.tsx`; `frontend/src/api/{clinicalNotes,patients,availability}.ts`; `.claude/launch.json` (both copies — fixed
+stale paths/backend port so `preview_start` actually works in this checkout, unrelated to the four capabilities but discovered while manually verifying them in-browser).
+
+**Manually verified in-browser** (not just automated tests): logged in as seeded admin, created and
+signed a clinical note with an amendment, confirmed the Timeline picked up the new events, attempted
+to book an unavailable therapist and got the backend's own rejection message, configured availability
+via a direct API call and confirmed the same booking then succeeded.
+
 ## 9. Local dev quick-start
 
 ```bash
@@ -295,3 +397,4 @@ Frontend `frontend/.env.production` sets `VITE_API_URL=/api/v1` (relative — se
 - Deploys: push to `main` → Render auto-deploys backend per `render.yaml` (Blueprint, `rootDir: backend`), Vercel (and possibly Netlify) auto-deploys frontend. Render runs `prisma migrate deploy` as a `preDeployCommand` before starting `node build/app.js` on each deploy. `DATABASE_URL` is `sync: false` in `render.yaml` — must be set manually in the Render dashboard.
 - **`DATABASE_URL` must use Supabase's session pooler**, not the direct connection host and not the transaction pooler: `postgresql://postgres.<project-ref>:<password>@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres`. Direct host (`db.<ref>.supabase.co:5432`) is IPv6-only and unreachable from Render; the transaction pooler (port `6543`) breaks Prisma's prepared statements. Session pooler (port `5432` on the pooler hostname) is correct because this backend is a persistent long-running process, not serverless. See §8 2026-08-30 entry for the full debugging trail.
 - Vercel's dashboard-level env vars (Project Settings → Environment Variables) **override** any same-named var in a committed `.env.production` file at build time — when the deployed frontend is hitting a stale/wrong backend URL, check the Vercel dashboard value first, not just the repo file.
+- A real local Postgres test database (`numa_test`) is wired up via `backend/.env`'s `DATABASE_URL` — see CLAUDE.md rule #10 and §8e-i above. Use it for `*.integration.test.ts` coverage of anything a fake Prisma double can't prove (constraint behavior, real concurrency); never point it at Supabase production.

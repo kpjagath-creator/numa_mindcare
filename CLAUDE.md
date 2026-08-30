@@ -24,12 +24,15 @@ Numa MindCare — internal practice-management web app for a single therapy/ment
 7. **RBAC is centralized** in `backend/src/auth/permissions.ts` (Role→Permission map, `resource:action` strings). Routes declare `requirePermission("...")`. Never add a scattered `role === "admin"` check — add a role by adding a key to `ROLE_PERMISSIONS`.
 8. **Don't store or print the production admin password** in code, commits, or docs.
 9. Design tokens: primary teal `#3D9E8E`, sand background `#F7F2EC`, revenue green `#16A34A`, status colors (purple = no-show, red = dropped). Don't reintroduce older tokens (`#2d6b5f`, `#1A7A6E`, `#1a2535`).
+10. `backend/.env`'s `DATABASE_URL` points at a local Postgres database (`numa_test`) — this is a disposable local dev/test database, not production. `backend/src/services/__tests__/*.integration.test.ts` runs real queries against it (wiping/reseeding its own tables per test) to verify things an in-memory Prisma double can't prove, e.g. Postgres `EXCLUDE` constraint / compare-and-swap concurrency behavior — they skip gracefully if it isn't reachable. `vitest.config.ts` sets `fileParallelism: false` so these files don't race each other on shared tables. Never point this at Supabase production.
 
 ## Where things live
 
 | Need to touch | File |
 |---|---|
-| Session create/complete/reschedule/cancel logic + status auto-advance | `backend/src/services/therapySessionsService.ts` |
+| Session create/complete/reschedule/cancel logic + status auto-advance + booking concurrency/availability | `backend/src/services/therapySessionsService.ts` |
+| Clinical note sign-off/amendments | `backend/src/services/clinicalNotesService.ts` |
+| Patient timeline composition (PAT-10) | `backend/src/services/patientTimelineService.ts` |
 | RBAC permission map | `backend/src/auth/permissions.ts` |
 | JWT/session cookie config | `backend/src/auth/jwt.ts`, `backend/src/auth/cookies.ts` |
 | Auth middleware | `backend/src/middleware/requireAuth.ts` |

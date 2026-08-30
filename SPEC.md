@@ -14,7 +14,7 @@ Staff-only tool, accessed via username/password login. Centralized permission-ba
   - **Discovery call** — free intake call, no charges, clinical notes required on completion.
   - **Therapy session** — billable, charges optional per session.
   Sessions carry a status (upcoming/completed/cancelled/no_show), payment status, optional charges, and support rescheduling (which chains to the original via `rescheduledFromId`).
-- **Clinical note** — free-form note attached to a completed session, attributed to the author.
+- **Clinical note** — free-form note attached to a completed session, attributed to the author. Starts as a **draft** (editable/deletable); once **signed**, its content, author, and signature are immutable, and further changes are recorded as append-only **amendments** that never alter the original signed text.
 - **Patient status log** — audit trail of every status change (who, when, previous → new, optional notes).
 
 ## 3. Patient lifecycle
@@ -51,6 +51,8 @@ The session's `sessionType` field ("discovery" vs "therapy") is the single sourc
 - Completing a discovery call requires notes; completing a therapy session accepts optional charges.
 - Rescheduling preserves the original session's type and links the new session back to it.
 - Track per-session payment status.
+- **Booking is concurrency-safe**: two simultaneous requests for the same patient/therapist and overlapping time can never both succeed — enforced at the database level (see ARCHITECTURE.md §6.4), not just by an application-level check.
+- **Booking (and rescheduling) is availability-aware**: a session may only be created for an active therapist, within one of their configured weekly availability windows, and not on a one-off blocked-out date. The Schedule page's "Add Session" form shows a live availability indicator for the selected therapist/date/time as a UX aid; the backend independently re-validates and is the sole source of truth.
 
 ### Team / availability
 - Manage team members (create, list, view a therapist's assigned patients).
@@ -58,8 +60,13 @@ The session's `sessionType` field ("discovery" vs "therapy") is the single sourc
 - Record one-off blockout dates (leave/holidays) per therapist.
 
 ### Clinical notes
-- Attach, edit, and delete free-form notes on a session.
+- Attach, edit, and delete free-form **draft** notes on a session.
+- **Sign a note** to lock it: content, author, signed-by, and signed-at become permanent — a signed note can no longer be edited or deleted (enforced server-side).
+- **Add an amendment** to a signed note — an append-only, individually-attributed follow-up entry that never alters the original signed content.
 - The most recent completed discovery call's notes surface on the patient profile as a highlighted "Discovery Notes" card, visible to any therapist who later works with the patient.
+
+### Patient timeline
+- The patient profile shows a unified, chronological **Timeline** composing the patient's lifecycle/status changes, therapist assignment changes, sessions, payment status changes, and clinical notes (including sign-off) into one ordered view, distinguished by type. Read-only — all mutation still happens through the existing patient/session/notes UI.
 
 ### Billing & analytics
 - Revenue and payment-status views (Billing page).
@@ -72,12 +79,12 @@ All endpoints require an authenticated session except `POST /auth/login`. Each e
 | Resource | Base path | Endpoints |
 |---|---|---|
 | Auth | `/auth` | `POST /login`, `POST /logout`, `GET /me`, `POST /change-password` |
-| Patients | `/patients` | CRUD, `PATCH /:id/status`, `PATCH /:id/therapist`, `GET /:id/status-logs` |
+| Patients | `/patients` | CRUD, `PATCH /:id/status`, `PATCH /:id/therapist`, `GET /:id/status-logs`, `GET /:id/timeline` |
 | Team members | `/team-members` | CRUD-ish, `GET /:id/patients` |
 | Therapy sessions | `/therapy-sessions` | create/list/get/delete, `/:id/cancel`, `/:id/complete`, `/:id/reschedule`, `/:id/no-show`, `/:id/payment-status`, `/therapist/:id` |
 | Analytics | `/analytics` | `GET /dashboard`, `GET /revenue` |
 | Availability | `/availability` | `PUT/GET /therapist/:id/slots`, `POST/GET /therapist/:id/blockouts`, `DELETE /blockouts/:id` |
-| Clinical notes | `/clinical-notes` | `POST/GET /session/:sessionId`, `PUT/DELETE /:id` |
+| Clinical notes | `/clinical-notes` | `POST/GET /session/:sessionId`, `PUT/DELETE /:id`, `PATCH /:id/sign`, `POST /:id/amendments` |
 
 ## 6. Frontend routes
 
