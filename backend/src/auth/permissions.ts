@@ -25,6 +25,7 @@ export const PERMISSIONS = [
   "clinical_notes:create",
   "clinical_notes:update",
   "clinical_notes:delete",
+  "clinical_notes:sign",
 
   "team:read",
   "team:create",

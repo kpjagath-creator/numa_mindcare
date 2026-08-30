@@ -2,7 +2,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import * as clinicalNotesService from "../services/clinicalNotesService";
-import { createNoteSchema, updateNoteSchema } from "../validators/clinicalNoteValidators";
+import { createNoteSchema, updateNoteSchema, signNoteSchema, addAmendmentSchema } from "../validators/clinicalNoteValidators";
 import { sendSuccess } from "../utils/responseHelper";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -59,5 +59,29 @@ export async function deleteNote(req: Request, res: Response, next: NextFunction
     if (id === null) return;
     await clinicalNotesService.deleteNote(id);
     sendSuccess(res, { message: "Clinical note deleted successfully" });
+  } catch (err) { next(err); }
+}
+
+// ── PATCH /api/v1/clinical-notes/:id/sign ────────────────────────────────────
+
+export async function signNote(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = parseId(req.params.id, res);
+    if (id === null) return;
+    const input = signNoteSchema.parse(req.body);
+    const note = await clinicalNotesService.signNote(id, input);
+    sendSuccess(res, { note });
+  } catch (err) { next(err); }
+}
+
+// ── POST /api/v1/clinical-notes/:id/amendments ───────────────────────────────
+
+export async function addAmendment(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = parseId(req.params.id, res);
+    if (id === null) return;
+    const input = addAmendmentSchema.parse(req.body);
+    const note = await clinicalNotesService.addAmendment(id, input);
+    sendSuccess(res, { note }, 201);
   } catch (err) { next(err); }
 }

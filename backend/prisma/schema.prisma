@@ -125,17 +125,36 @@ model TherapistBlockout {
   @@map("therapist_blockouts")
 }
 
-// F4: Clinical notes (open-form, not SOAP)
+// F4 / CLN-07: Clinical notes (open-form, not SOAP). A note starts as a mutable "draft"; once
+// signed, its original content/authorship/signature are immutable and further changes are
+// recorded as append-only amendments (see ClinicalNoteAmendment) rather than edits.
 model ClinicalNote {
   id            Int            @id @default(autoincrement())
   sessionId     Int            @map("session_id")
   content       String         // Free-form clinical notes
   createdByName String         @map("created_by_name")
+  status        String         @default("draft") @map("status") // "draft" | "signed"
+  signedAt      DateTime?      @map("signed_at")
+  signedByName  String?        @map("signed_by_name")
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   session       TherapySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  amendments    ClinicalNoteAmendment[]
 
   @@map("clinical_notes")
+}
+
+// Append-only amendment history for a signed ClinicalNote. Amendments never modify or remove the
+// original signed record — they are additional, individually-attributed entries attached to it.
+model ClinicalNoteAmendment {
+  id              Int          @id @default(autoincrement())
+  clinicalNoteId  Int          @map("clinical_note_id")
+  content         String
+  createdByName   String       @map("created_by_name")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  clinicalNote    ClinicalNote @relation(fields: [clinicalNoteId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_note_amendments")
 }
 
 model User {
