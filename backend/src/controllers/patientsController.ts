@@ -2,6 +2,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import * as patientsService from "../services/patientsService";
+import { getPatientTimeline } from "../services/patientTimelineService";
 import {
   createPatientSchema,
   updateStatusSchema,
@@ -108,5 +109,16 @@ export async function getStatusLogs(req: Request, res: Response, next: NextFunct
     if (id === null) return;
     const logs = await patientsService.getStatusLogs(id);
     sendSuccess(res, { logs });
+  } catch (err) { next(err); }
+}
+
+// ── GET /api/v1/patients/:id/timeline (PAT-10) ────────────────────────────────
+
+export async function getTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = parseId(req.params.id, res);
+    if (id === null) return;
+    const timeline = await getPatientTimeline(id);
+    sendSuccess(res, { timeline });
   } catch (err) { next(err); }
 }

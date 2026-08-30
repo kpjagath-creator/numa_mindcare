@@ -10,7 +10,9 @@ import StatusHistoryModal from "../../components/patients/StatusHistoryModal";
 import Spinner from "../../components/ui/Spinner";
 import type { Patient, PatientStatusLog, TeamMember, TherapySession } from "../../types/index";
 import { STATUS_LABELS, STATUS_TRANSITIONS, STATUS_NEXT_ACTION_HINT } from "../../constants/statuses";
-import { getPatient, getStatusLogs, updatePatientStatus, updatePatientTherapist, updatePatientInfo, deletePatient } from "../../api/patients";
+import { getPatient, getStatusLogs, updatePatientStatus, updatePatientTherapist, updatePatientInfo, deletePatient, getPatientTimeline } from "../../api/patients";
+import type { PatientTimelineEntry } from "../../api/patients";
+import PatientTimeline from "../../components/patients/PatientTimeline";
 import { listTeamMembers } from "../../api/teamMembers";
 import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus } from "../../api/therapySessions";
 import { getNotesForSession } from "../../api/clinicalNotes";
@@ -116,6 +118,7 @@ export default function PatientProfilePage() {
   const [therapists, setTherapists] = useState<TeamMember[]>([]);
   const [adminName, setAdminNameState] = useState(() => getAdminName());
   const [allPatientNotes, setAllPatientNotes] = useState<ClinicalNote[]>([]);
+  const [timeline, setTimeline] = useState<PatientTimelineEntry[]>([]);
 
   // Status update form
   const [newStatus, setNewStatus] = useState("");
@@ -160,15 +163,17 @@ export default function PatientProfilePage() {
     if (isNaN(patientId)) { setLoadError("Invalid patient ID."); return; }
     void (async () => {
       try {
-        const [p, l, members, sessResult] = await Promise.all([
+        const [p, l, members, sessResult, tl] = await Promise.all([
           getPatient(patientId),
           getStatusLogs(patientId),
           listTeamMembers(),
           listSessions({ patient_id: patientId, limit: 200 }),
+          getPatientTimeline(patientId),
         ]);
         setPatient(p);
         setLogs(l);
         setSessions(sessResult.sessions);
+        setTimeline(tl);
         setNewStatus(p.currentStatus);
         setSelectedTherapistId(p.therapistId ? String(p.therapistId) : "");
         setInfoValues({ name: p.name, mobile: p.mobile, email: p.email, age: String(p.age), source: p.source ?? "", referred_by: p.referredBy ?? "" });
@@ -203,6 +208,7 @@ export default function PatientProfilePage() {
       const updated = await updatePatientStatus(patientId, { new_status: newStatus as any, changed_by_name: nameToSubmit, notes: notes.trim() || undefined });
       setPatient(updated);
       setLogs(await getStatusLogs(patientId));
+      setTimeline(await getPatientTimeline(patientId));
       setAdminName(nameToSubmit);
       setChangedByName("");
       setNotes("");
@@ -241,6 +247,7 @@ export default function PatientProfilePage() {
         });
         setPatient(updated);
         setLogs(await getStatusLogs(patientId));
+        setTimeline(await getPatientTimeline(patientId));
         try { localStorage.setItem("admin_name", nameToSubmit); } catch {}
       } else {
         setPatient(updatedPatient);
@@ -269,17 +276,20 @@ export default function PatientProfilePage() {
   async function refreshSessions() {
     const r = await listSessions({ patient_id: patientId, limit: 200 });
     setSessions(r.sessions);
+    setTimeline(await getPatientTimeline(patientId));
   }
 
   async function refreshPatientAndSessions() {
-    const [p, r, l] = await Promise.all([
+    const [p, r, l, tl] = await Promise.all([
       getPatient(patientId),
       listSessions({ patient_id: patientId, limit: 200 }),
       getStatusLogs(patientId),
+      getPatientTimeline(patientId),
     ]);
     setPatient(p);
     setSessions(r.sessions);
     setLogs(l);
+    setTimeline(tl);
     setNewStatus("");
   }
 
@@ -509,6 +519,11 @@ export default function PatientProfilePage() {
           </CollapsibleCard>
         )}
 
+        {/* Timeline — unified chronological view (PAT-10) */}
+        <CollapsibleCard title={`Timeline (${timeline.length})`} storageKey="timeline" defaultOpen={false}>
+          <PatientTimeline entries={timeline} />
+        </CollapsibleCard>
+
         {/* Change Status Modal */}
         {showCurrentStatus && (
           <>
@@ -615,7 +630,7 @@ export default function PatientProfilePage() {
             sessionId={notesSession.id}
             patientName={notesSession.patient.name}
             sessionDate={notesSession.startTime}
-            onClose={() => setNotesSession(null)}
+            onClose={() => { setNotesSession(null); void getPatientTimeline(patientId).then(setTimeline); }}
           />
         )}
 
@@ -798,6 +813,11 @@ export default function PatientProfilePage() {
           />
         </CollapsibleCard>
       )}
+
+      {/* ── Timeline — unified chronological view (PAT-10) ── */}
+      <CollapsibleCard title={`Timeline (${timeline.length})`} storageKey="timeline">
+        <PatientTimeline entries={timeline} />
+      </CollapsibleCard>
 
       {/* ── Change Status Modal ── */}
       {showCurrentStatus && (

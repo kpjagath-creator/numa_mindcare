@@ -10,6 +10,7 @@ import {
   updatePatientInfo,
   deletePatient,
   getStatusLogs,
+  getTimeline,
 } from "../controllers/patientsController";
 import { requirePermission } from "../middleware/requirePermission";
 
@@ -23,5 +24,6 @@ router.patch("/:id/status", requirePermission("patients:update"), updateStatus);
 router.patch("/:id/therapist", requirePermission("patients:update"), updateTherapist);
 router.delete("/:id", requirePermission("patients:delete"), deletePatient);
 router.get("/:id/status-logs", requirePermission("patients:read"), getStatusLogs);
+router.get("/:id/timeline", requirePermission("patients:read"), getTimeline);
 
 export default router;

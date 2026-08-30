@@ -227,15 +227,29 @@ export interface TherapistBlockoutEntry {
   reason: string | null;
 }
 
-// ── Clinical notes ─────────────────────────────────────────────────────────────
+// ── Clinical notes (CLN-07: sign-off / immutability) ───────────────────────────
+
+export type ClinicalNoteStatus = "draft" | "signed";
+
+export interface ClinicalNoteAmendment {
+  id: number;
+  clinicalNoteId: number;
+  content: string;
+  createdByName: string;
+  createdAt: Date;
+}
 
 export interface ClinicalNote {
   id: number;
   sessionId: number;
   content: string;
   createdByName: string;
+  status: ClinicalNoteStatus;
+  signedAt: Date | null;
+  signedByName: string | null;
   createdAt: Date;
   updatedAt: Date;
+  amendments: ClinicalNoteAmendment[];
 }
 
 export interface CreateClinicalNoteInput {
@@ -245,4 +259,26 @@ export interface CreateClinicalNoteInput {
 
 export interface UpdateClinicalNoteInput {
   content: string;
+}
+
+export interface SignClinicalNoteInput {
+  signed_by_name: string;
+}
+
+export interface AddClinicalNoteAmendmentInput {
+  content: string;
+  created_by_name: string;
+}
+
+// ── Patient timeline (PAT-10) ───────────────────────────────────────────────────
+
+export type PatientTimelineEntryType = "lifecycle" | "assignment" | "payment" | "session" | "clinical_note";
+
+export interface PatientTimelineEntry {
+  id: string;
+  type: PatientTimelineEntryType;
+  timestamp: Date;
+  actor: string | null;
+  description: string;
+  link: { resource: string; id: number; sessionId?: number } | null;
 }

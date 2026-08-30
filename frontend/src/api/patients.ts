@@ -72,6 +72,22 @@ export async function getStatusLogs(id: number): Promise<PatientStatusLog[]> {
   return res.data.data.logs;
 }
 
+export type PatientTimelineEntryType = "lifecycle" | "assignment" | "payment" | "session" | "clinical_note";
+
+export interface PatientTimelineEntry {
+  id: string;
+  type: PatientTimelineEntryType;
+  timestamp: string;
+  actor: string | null;
+  description: string;
+  link: { resource: string; id: number; sessionId?: number } | null;
+}
+
+export async function getPatientTimeline(id: number): Promise<PatientTimelineEntry[]> {
+  const res = await api.get<{ success: true; data: { timeline: PatientTimelineEntry[] } }>(`/patients/${id}/timeline`);
+  return res.data.data.timeline;
+}
+
 export interface UpdatePatientInfoPayload {
   name?: string;
   mobile?: string;
