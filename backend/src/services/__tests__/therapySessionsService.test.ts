@@ -29,7 +29,13 @@ function seedPatient(id: number, currentStatus: string) {
 }
 
 function seedTherapist(id: number) {
-  db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist" });
+  db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist", isActive: true });
+  // Wide-open availability (every day, all day) — this suite exercises lifecycle transitions, not
+  // Capability 2's availability-aware scheduling, which has its own dedicated tests below and in
+  // therapySessionsService.integration.test.ts.
+  for (let dayOfWeek = 0; dayOfWeek <= 6; dayOfWeek++) {
+    db.availabilitySlots.push({ id: db.nextAvailabilityId++, teamMemberId: id, dayOfWeek, startTime: "00:00", endTime: "23:59" });
+  }
 }
 
 describe("therapySessionsService — session-driven lifecycle transitions via Patient Lifecycle", () => {
@@ -178,5 +184,135 @@ describe("therapySessionsService — session-driven lifecycle transitions via Pa
     // Neither the session nor the patient status change should have survived the rollback.
     expect(db.sessions.size).toBe(0);
     expect(db.patients.get(7)!.currentStatus).toBe("created");
+  });
+});
+
+describe("therapySessionsService — availability-aware scheduling (SCH-04, SCH-20)", () => {
+  beforeEach(() => {
+    db.reset();
+  });
+
+  function seedNarrowTherapist(id: number, opts?: { isActive?: boolean }) {
+    db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist", isActive: opts?.isActive ?? true });
+  }
+
+  it("rejects a session for a therapist with no configured availability", async () => {
+    seedNarrowTherapist(10);
+    seedPatient(10, "discovery_completed");
+
+    await expect(
+      createSession({
+        patient_id: 10,
+        therapist_id: 10,
+        session_date: "2026-09-07", // a Monday
+        start_time: "10:00",
+        duration_mins: 30,
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("rejects a session on a day the therapist has no availability slot, even if another day does", async () => {
+    seedNarrowTherapist(11);
+    seedPatient(11, "discovery_completed");
+    // Monday only, 09:00–17:00.
+    db.availabilitySlots.push({ id: 1, teamMemberId: 11, dayOfWeek: 1, startTime: "09:00", endTime: "17:00" });
+
+    // 2026-09-08 is a Tuesday — no slot configured for it.
+    await expect(
+      createSession({
+        patient_id: 11,
+        therapist_id: 11,
+        session_date: "2026-09-08",
+        start_time: "10:00",
+        duration_mins: 30,
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("allows a session that fits within the configured window", async () => {
+    seedNarrowTherapist(12);
+    seedPatient(12, "discovery_completed");
+    db.availabilitySlots.push({ id: 1, teamMemberId: 12, dayOfWeek: 1, startTime: "09:00", endTime: "17:00" });
+
+    const session = await createSession({
+      patient_id: 12,
+      therapist_id: 12,
+      session_date: "2026-09-07", // Monday
+      start_time: "10:00",
+      duration_mins: 30,
+      session_type: "therapy",
+    });
+    expect(session.status).toBe("upcoming");
+  });
+
+  it("rejects a session that crosses the availability window's end", async () => {
+    seedNarrowTherapist(13);
+    seedPatient(13, "discovery_completed");
+    db.availabilitySlots.push({ id: 1, teamMemberId: 13, dayOfWeek: 1, startTime: "09:00", endTime: "17:00" });
+
+    await expect(
+      createSession({
+        patient_id: 13,
+        therapist_id: 13,
+        session_date: "2026-09-07",
+        start_time: "16:45",
+        duration_mins: 30, // ends 17:15
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("rejects a session on a blocked-out date even within the weekly window", async () => {
+    seedNarrowTherapist(14);
+    seedPatient(14, "discovery_completed");
+    db.availabilitySlots.push({ id: 1, teamMemberId: 14, dayOfWeek: 1, startTime: "09:00", endTime: "17:00" });
+    db.blockouts.push({ id: 1, teamMemberId: 14, blockDate: new Date("2026-09-07T00:00:00.000Z"), reason: "Leave" });
+
+    await expect(
+      createSession({
+        patient_id: 14,
+        therapist_id: 14,
+        session_date: "2026-09-07",
+        start_time: "10:00",
+        duration_mins: 30,
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("rejects booking an inactive therapist", async () => {
+    seedNarrowTherapist(15, { isActive: false });
+    seedPatient(15, "discovery_completed");
+    db.availabilitySlots.push({ id: 1, teamMemberId: 15, dayOfWeek: 1, startTime: "09:00", endTime: "17:00" });
+
+    await expect(
+      createSession({
+        patient_id: 15,
+        therapist_id: 15,
+        session_date: "2026-09-07",
+        start_time: "10:00",
+        duration_mins: 30,
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("applies the same availability rules to a discovery call", async () => {
+    seedNarrowTherapist(16);
+    seedPatient(16, "created");
+    db.availabilitySlots.push({ id: 1, teamMemberId: 16, dayOfWeek: 1, startTime: "09:00", endTime: "17:00" });
+
+    await expect(
+      createSession({
+        patient_id: 16,
+        therapist_id: 16,
+        session_date: "2026-09-07",
+        start_time: "18:00", // outside the window
+        duration_mins: 30,
+        session_type: "discovery",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
   });
 });

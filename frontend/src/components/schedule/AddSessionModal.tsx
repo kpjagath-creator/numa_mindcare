@@ -5,6 +5,8 @@ import type { Patient, TeamMember, TherapySession } from "../../types/index";
 import { listPatients } from "../../api/patients";
 import { listTeamMembers } from "../../api/teamMembers";
 import { createSession, getTherapistSessions } from "../../api/therapySessions";
+import { getAvailability, getBlockouts } from "../../api/availability";
+import type { AvailabilitySlot, BlockoutEntry } from "../../api/availability";
 import SearchableSelect from "../ui/SearchableSelect";
 
 interface Props {
@@ -66,6 +68,26 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
   const [showTherapistSchedule, setShowTherapistSchedule] = useState(false);
   const [therapistSessions, setTherapistSessions] = useState<TherapySession[]>([]);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+
+  // Availability-aware scheduling (SCH-04/SCH-20) — a UX aid only. The backend is the
+  // authoritative check and will reject an out-of-availability or blocked-out booking regardless
+  // of what this indicator shows.
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[] | null>(null);
+  const [blockouts, setBlockouts] = useState<BlockoutEntry[] | null>(null);
+
+  useEffect(() => {
+    if (!form.therapist_id) { setAvailabilitySlots(null); setBlockouts(null); return; }
+    const therapistId = parseInt(form.therapist_id, 10);
+    let cancelled = false;
+    void Promise.all([getAvailability(therapistId), getBlockouts(therapistId)])
+      .then(([slots, blockoutList]) => {
+        if (cancelled) return;
+        setAvailabilitySlots(slots);
+        setBlockouts(blockoutList);
+      })
+      .catch(() => { if (!cancelled) { setAvailabilitySlots(null); setBlockouts(null); } });
+    return () => { cancelled = true; };
+  }, [form.therapist_id]);
 
   useEffect(() => {
     void Promise.all([
@@ -144,6 +166,32 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
   }
 
   const selectedTherapist = therapists.find((t) => String(t.id) === form.therapist_id);
+
+  // Client-side availability indicator — mirrors the backend's own rules (weekly window + blockout
+  // date) closely enough to give staff a useful heads-up, but is never relied on as the actual
+  // check. The backend re-validates on submit and is the source of truth.
+  type SlotAvailability = { kind: "unknown" } | { kind: "available" } | { kind: "outside_window" } | { kind: "blocked"; reason: string | null };
+  function computeSlotAvailability(): SlotAvailability {
+    if (!form.therapist_id || !form.session_date || !form.start_time || !form.duration_mins) return { kind: "unknown" };
+    if (availabilitySlots === null || blockouts === null) return { kind: "unknown" };
+
+    const dayOfWeek = new Date(`${form.session_date}T12:00:00`).getDay();
+    const [h, m] = form.start_time.split(":").map(Number);
+    const endMins = h * 60 + m + parseInt(form.duration_mins, 10);
+    const endStr = `${String(Math.floor(endMins / 60) % 24).padStart(2, "0")}:${String(endMins % 60).padStart(2, "0")}`;
+    const crossesMidnight = endMins >= 24 * 60;
+
+    const blockout = blockouts.find((b) => b.blockDate.slice(0, 10) === form.session_date);
+    if (blockout) return { kind: "blocked", reason: blockout.reason };
+
+    if (crossesMidnight) return { kind: "outside_window" };
+
+    const fits = availabilitySlots.some(
+      (slot) => slot.dayOfWeek === dayOfWeek && slot.startTime <= form.start_time && slot.endTime >= endStr
+    );
+    return fits ? { kind: "available" } : { kind: "outside_window" };
+  }
+  const slotAvailability = computeSlotAvailability();
 
   // Patients still in the discovery phase (not yet started therapy)
   const DISCOVERY_PHASE_STATUSES = ["created", "discovery_scheduled"];
@@ -283,6 +331,24 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
               <input style={s.input} placeholder="Session notes…" value={form.notes} onChange={(e) => set("notes", e.target.value)} />
             </Field>
           </div>
+
+          {/* Availability indicator (SCH-04/SCH-20) — informational only, backend re-validates on submit */}
+          {slotAvailability.kind !== "unknown" && (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 6, borderRadius: 8, padding: "8px 12px", marginBottom: 20, fontSize: 12,
+                ...(slotAvailability.kind === "available"
+                  ? { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d" }
+                  : { background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C" }),
+              }}
+            >
+              {slotAvailability.kind === "available" && <span>✓ {selectedTherapist?.name} is available at this time.</span>}
+              {slotAvailability.kind === "outside_window" && <span>⚠ {selectedTherapist?.name} is not scheduled to be available at this time.</span>}
+              {slotAvailability.kind === "blocked" && (
+                <span>⚠ {selectedTherapist?.name} is blocked out on this date{slotAvailability.reason ? ` (${slotAvailability.reason})` : ""}.</span>
+              )}
+            </div>
+          )}
 
           {/* Therapist schedule view */}
           {showTherapistSchedule && (

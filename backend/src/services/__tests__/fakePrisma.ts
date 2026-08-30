@@ -16,6 +16,22 @@ export type FakeTeamMember = {
   id: number;
   name: string;
   employeeType: string;
+  isActive: boolean;
+};
+
+export type FakeAvailabilitySlot = {
+  id: number;
+  teamMemberId: number;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+};
+
+export type FakeBlockout = {
+  id: number;
+  teamMemberId: number;
+  blockDate: Date;
+  reason: string | null;
 };
 
 export type FakeSession = {
@@ -52,16 +68,27 @@ export class FakeDb {
   teamMembers = new Map<number, FakeTeamMember>();
   sessions = new Map<number, FakeSession>();
   statusLogs: FakeStatusLog[] = [];
+  // Availability defaults to "open every day, all day" so existing tests that don't care about
+  // Capability 2 (availability-aware scheduling) aren't affected by it — tests that specifically
+  // exercise availability/blockout rejection overwrite these for the therapist under test.
+  availabilitySlots: FakeAvailabilitySlot[] = [];
+  blockouts: FakeBlockout[] = [];
   nextSessionId = 1;
   nextLogId = 1;
+  nextAvailabilityId = 1;
+  nextBlockoutId = 1;
 
   reset(): void {
     this.patients.clear();
     this.teamMembers.clear();
     this.sessions.clear();
     this.statusLogs = [];
+    this.availabilitySlots = [];
+    this.blockouts = [];
     this.nextSessionId = 1;
     this.nextLogId = 1;
+    this.nextAvailabilityId = 1;
+    this.nextBlockoutId = 1;
   }
 }
 
@@ -159,6 +186,21 @@ export function createFakeClient(db: FakeDb): any {
       findUnique: async ({ where }: any) => {
         const t = db.teamMembers.get(where.id);
         return t ? { ...t } : null;
+      },
+    },
+    therapistAvailability: {
+      findMany: async ({ where }: any) => {
+        return db.availabilitySlots.filter(
+          (s) => s.teamMemberId === where.teamMemberId && s.dayOfWeek === where.dayOfWeek
+        );
+      },
+    },
+    therapistBlockout: {
+      findFirst: async ({ where }: any) => {
+        const target = (where.blockDate as Date).getTime();
+        return (
+          db.blockouts.find((b) => b.teamMemberId === where.teamMemberId && b.blockDate.getTime() === target) ?? null
+        );
       },
     },
     patientStatusLog: {
