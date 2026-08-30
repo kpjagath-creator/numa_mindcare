@@ -139,7 +139,7 @@ Last handful of commits (newest first):
 5. `067000a` — `context.md` added for session bootstrapping (that file is now one release behind — doesn't mention analytics/availability/clinicalNotes/billing/dashboard modules, which already exist in the code).
 6. Before that: the discovery-call workflow feature and its bug-fix chain (`031f8e4`, `877e98`, `02c8de1`, `3877e98` etc.) — fully documented in `context.md` §9.
 
-**Working theory of current state:** functionally complete-ish MVP (patients, sessions, team, availability, clinical notes, billing/analytics) with a UI/UX visual pass finished, and authentication + RBAC now implemented, locally validated, and deployed to production (see §8a and §8b). No visible in-progress feature branch — `main` is the only branch fetched. Good candidates for "what's next": reconciling `context.md` with the newer modules (it still predates auth and several other modules), adding a second real role beyond `admin`, or picking up whatever the user intended next (ask them).
+**Working theory of current state:** functionally complete-ish MVP (patients, sessions, team, availability, clinical notes, billing/analytics) with a UI/UX visual pass finished, and authentication + RBAC now implemented, locally validated, and deployed to production (see §8a, §8b, §8c). No visible in-progress feature branch — `main` is the only branch fetched. Good candidates for "what's next": reconciling `context.md` with the newer modules (it still predates auth and several other modules), adding a second real role beyond `admin`, or picking up whatever the user intended next (ask them).
 
 ## 8a. Authentication & RBAC (added 2026-08-30)
 
@@ -163,6 +163,17 @@ Auth + RBAC deployed to production. Live URLs: frontend `https://numa-mindcare.v
 - Render env var `NODE_ENV=production` makes `npm install` skip devDependencies during the *build* step too (not just at runtime), which broke `tsc` (`@types/express`/`@types/node` missing). Fixed by changing the build command to `npm install --include=dev && npx prisma generate && npm run build` (both in `render.yaml` and the service's dashboard Settings — the dashboard value doesn't auto-resync from `render.yaml` on every push, so if `render.yaml`'s build/start commands ever change again, update the dashboard Settings too or confirm this service is properly Blueprint-synced).
 - Seeding the bootstrap admin must NOT be done by running the full `prisma/seed.ts` in production — it also creates 10 demo team members/patients/sessions. Bootstrap-only admin creation was done with a small temporary script (not committed) that duplicated just the idempotent admin-create block from `seed.ts`.
 
+## 8c. Cross-site session cookie fix (2026-08-30)
+
+**Bug:** admin login in Chrome Incognito (and any browser blocking third-party cookies — Safari default, Brave default, Firefox strict mode) appeared to succeed, then immediately bounced back to `/login` on the first authenticated request. Reproduced by a clean, cookie-fresh browser session that made a direct `fetch` to `onrender.com` — the session cookie set by the login response was never sent back on subsequent requests. Root cause: frontend (`numa-mindcare.vercel.app`) and backend (`numa-mindcare.onrender.com`) are different domains, so the session cookie (`SameSite=None; Secure`) is a cross-site/third-party cookie from the browser's point of view. Third-party cookie blocking (on by default in Incognito, Safari, Brave, Firefox strict) drops it regardless of `SameSite=None`.
+
+**Fix:** proxy `/api/*` through Vercel so the browser only ever talks to `numa-mindcare.vercel.app` — the cookie becomes first-party and is no longer subject to third-party blocking.
+- `frontend/vercel.json`: added `{ "source": "/api/(.*)", "destination": "https://numa-mindcare.onrender.com/api/$1" }` as a rewrite *before* the SPA catch-all rewrite. Vercel proxies this transparently (including `Set-Cookie` and request cookies) — this is a supported "external rewrite," not a redirect.
+- `frontend/.env.production`: `VITE_API_URL` changed from the absolute `https://numa-mindcare.onrender.com/api/v1` to the relative `/api/v1`.
+- **Also had to update the Vercel dashboard's `VITE_API_URL` env var to `/api/v1`** — same gotcha as always: the dashboard value overrides the committed `.env.production` at build time and does not auto-sync from the repo.
+- Verified post-deploy with a fresh, cookie-empty browser context: `fetch('/api/v1/auth/login', ...)` and `fetch('/api/v1/auth/me', ...)` both resolved at `numa-mindcare.vercel.app` (not `onrender.com`), and a full page reload after login rendered the dashboard directly with no redirect loop.
+- Backend `cors()`/cookie config (`backend/src/app.ts`, `backend/src/auth/cookies.ts`) was left unchanged — still correct as a fallback for any direct (non-proxied) call to the backend, and harmless now that the cookie is first-party via the proxy path.
+
 ## 9. Local dev quick-start
 
 ```bash
@@ -179,9 +190,9 @@ cd frontend
 npm install
 npm run dev             # Vite, port 5173
 ```
-Frontend `frontend/.env.production` points `VITE_API_URL` at the production backend by default — create `frontend/.env.local` (gitignored) with `VITE_API_URL=http://localhost:3001/api/v1` to hit local backend instead. Updated for the Render migration: now points at `https://numa-mindcare.onrender.com/api/v1`.
+Frontend `frontend/.env.production` sets `VITE_API_URL=/api/v1` (relative — see §8c: Vercel proxies `/api/*` to the Render backend so the session cookie is first-party). Create `frontend/.env.local` (gitignored) with `VITE_API_URL=http://localhost:3001/api/v1` to hit a local backend instead of the proxy.
 
-**Important:** the Vercel project also has a dashboard-level `VITE_API_URL` env var for Production, which **overrides** the committed `.env.production` file at build time. If the two ever diverge, the dashboard value wins — check there first when the deployed site is calling the wrong backend URL.
+**Important:** the Vercel project also has a dashboard-level `VITE_API_URL` env var for Production, which **overrides** the committed `.env.production` file at build time. If the two ever diverge, the dashboard value wins — check there first when the deployed site is calling the wrong backend URL. (As of 2026-08-30 both are set to the relative `/api/v1`.)
 
 ## 10. Known conventions / gotchas to preserve
 
