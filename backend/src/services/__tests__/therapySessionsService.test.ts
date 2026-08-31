@@ -43,7 +43,7 @@ vi.mock("../sessionMeetingService", () => ({
 
 import prismaMock from "../../lib/prisma";
 import * as sessionMeetingService from "../sessionMeetingService";
-import { createSession, completeSession, rescheduleSession, cancelSession } from "../therapySessionsService";
+import { createSession, completeSession, rescheduleSession, cancelSession, deleteSession } from "../therapySessionsService";
 
 const meetingMock = vi.mocked(sessionMeetingService);
 
@@ -524,5 +524,134 @@ describe("therapySessionsService — Google Meet integration (MEET-01)", () => {
 
     expect(cancelled.status).toBe("cancelled");
     expect(db.sessions.get(session.id)!.status).toBe("cancelled");
+  });
+});
+
+// ── Lifecycle recovery at the scheduling boundary (MEET-02) ────────────────────
+//
+// These cover the two paths where a Google failure could previously destroy or hide Numa's only
+// reference to a live calendar event.
+
+describe("therapySessionsService — Google Calendar lifecycle recovery (MEET-02)", () => {
+  beforeEach(() => {
+    db.reset();
+    seedTherapist(1);
+    vi.clearAllMocks();
+  });
+
+  // ── M1: hard delete must not orphan a live external event ───────────────────
+
+  it("refuses to delete a session whose Google event could not be cancelled", async () => {
+    seedPatient(20, "started_therapy");
+    const session = await createSession({
+      patient_id: 20, therapist_id: 1, session_date: "2026-09-01",
+      start_time: "10:00", duration_mins: 60, session_type: "therapy",
+    });
+
+    // Cancellation failed — the event is still live and the row still holds its id.
+    meetingMock.cancelSessionMeeting.mockResolvedValueOnce({
+      meetingProvider: "google_meet",
+      googleEventId: "numasession20",
+      meetingLink: null,
+      meetingStatus: "CANCEL_FAILED",
+      meetingError: "Google Calendar event cancellation failed (503).",
+    });
+
+    await expect(deleteSession(session.id)).rejects.toMatchObject({ statusCode: 409 });
+
+    // The session survives, so the event reference survives with it and stays recoverable.
+    expect(db.sessions.get(session.id)).toBeDefined();
+  });
+
+  it("deletes normally once the Google event has been cancelled", async () => {
+    seedPatient(21, "started_therapy");
+    const session = await createSession({
+      patient_id: 21, therapist_id: 1, session_date: "2026-09-01",
+      start_time: "12:00", duration_mins: 60, session_type: "therapy",
+    });
+
+    meetingMock.cancelSessionMeeting.mockResolvedValueOnce({
+      meetingProvider: "google_meet",
+      googleEventId: null,
+      meetingLink: null,
+      meetingStatus: "CANCELLED",
+      meetingError: null,
+    });
+
+    await deleteSession(session.id);
+
+    expect(db.sessions.get(session.id)).toBeUndefined();
+  });
+
+  it("refuses to delete when the cancellation attempt itself errors, rather than guessing", async () => {
+    seedPatient(22, "started_therapy");
+    const session = await createSession({
+      patient_id: 22, therapist_id: 1, session_date: "2026-09-01",
+      start_time: "14:00", duration_mins: 60, session_type: "therapy",
+    });
+
+    // A database-level failure inside the integration: the event's state is unknown, so the
+    // conservative direction is to keep the row rather than destroy the only reference to it.
+    meetingMock.cancelSessionMeeting.mockRejectedValueOnce(new Error("database connection lost"));
+
+    await expect(deleteSession(session.id)).rejects.toMatchObject({ statusCode: 409 });
+    expect(db.sessions.get(session.id)).toBeDefined();
+  });
+
+  // ── M2: failed cancellation during reschedule stays visible and retryable ────
+
+  it("leaves the original session in a retryable CANCEL_FAILED state when reschedule cleanup fails", async () => {
+    seedPatient(23, "started_therapy");
+    const original = await createSession({
+      patient_id: 23, therapist_id: 1, session_date: "2026-09-01",
+      start_time: "16:00", duration_mins: 60, session_type: "therapy",
+    });
+
+    // The old event cannot be removed, so the reference must be retained and surfaced.
+    meetingMock.cancelSessionMeeting.mockImplementationOnce(async (id: number) => {
+      db.sessions.set(id, {
+        ...db.sessions.get(id)!,
+        googleEventId: `numasession${id}`,
+        meetingStatus: "CANCEL_FAILED",
+        meetingError: "Google Calendar event cancellation failed (503).",
+      });
+      return {
+        meetingProvider: "google_meet",
+        googleEventId: `numasession${id}`,
+        meetingLink: null,
+        meetingStatus: "CANCEL_FAILED" as const,
+        meetingError: "Google Calendar event cancellation failed (503).",
+      };
+    });
+
+    const rescheduled = await rescheduleSession(original.id, {
+      session_date: "2026-09-02", start_time: "16:00", duration_mins: 60,
+    });
+
+    // The reschedule itself still succeeds — Google never blocks a valid scheduling operation.
+    expect(rescheduled.id).not.toBe(original.id);
+    expect(db.sessions.get(original.id)!.status).toBe("rescheduled");
+
+    // The stale event is retained and flagged, not silently left looking healthy.
+    const stale = db.sessions.get(original.id)!;
+    expect(stale.meetingStatus).toBe("CANCEL_FAILED");
+    expect(stale.googleEventId).toBe(`numasession${original.id}`);
+  });
+
+  it("still schedules the replacement session when the old event cleanup fails", async () => {
+    seedPatient(24, "started_therapy");
+    const original = await createSession({
+      patient_id: 24, therapist_id: 1, session_date: "2026-09-01",
+      start_time: "18:00", duration_mins: 60, session_type: "therapy",
+    });
+    meetingMock.cancelSessionMeeting.mockRejectedValueOnce(new Error("unexpected integration error"));
+
+    const rescheduled = await rescheduleSession(original.id, {
+      session_date: "2026-09-03", start_time: "18:00", duration_mins: 60,
+    });
+
+    expect(rescheduled.status).toBe("upcoming");
+    // sessionType invariant (CLAUDE.md rule #1) still holds through the recovery path.
+    expect(rescheduled.sessionType).toBe("therapy");
   });
 });

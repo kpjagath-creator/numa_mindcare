@@ -15,6 +15,7 @@ import type { PatientTimelineEntry } from "../../api/patients";
 import PatientTimeline from "../../components/patients/PatientTimeline";
 import { listTeamMembers } from "../../api/teamMembers";
 import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus, retryMeeting } from "../../api/therapySessions";
+import { retryMeetingToast, serverMessage } from "../../components/schedule/meetingToast";
 import { getNotesForSession } from "../../api/clinicalNotes";
 import type { ClinicalNote } from "../../api/clinicalNotes";
 import SessionsTable from "../../components/schedule/SessionsTable";
@@ -303,16 +304,26 @@ export default function PatientProfilePage() {
     catch { showToast("Failed to mark no-show.", "error"); }
   }
 
-  // Retry Google Meet provisioning for a session whose generation failed (MEET-01).
+  // One retry action, two outcomes — the backend decides from the session's meeting state whether
+  // it is provisioning a meeting or removing a stale calendar event (MEET-02).
   async function handleSessionRetryMeeting(id: number) {
     try {
       const updated = await retryMeeting(id);
       await refreshSessions();
-      showToast(
-        updated.meetingStatus === "ACTIVE" ? "Google Meet link generated." : "Could not generate the meeting. Please try again.",
-        updated.meetingStatus === "ACTIVE" ? "success" : "error"
-      );
-    } catch { showToast("Failed to retry meeting generation.", "error"); }
+      showToast(...retryMeetingToast(updated.meetingStatus));
+    } catch { showToast("Failed to retry the calendar action.", "error"); }
+  }
+
+  // Delete can now be legitimately refused when the session's Google Calendar event is still live
+  // (MEET-02/M1). These handlers previously had no catch at all, so such a refusal was silent.
+  async function handleSessionDelete(id: number) {
+    try {
+      await deleteSession(id);
+      await refreshSessions();
+      showToast("Session deleted.", "success");
+    } catch (err) {
+      showToast(serverMessage(err, "Failed to delete session."), "error");
+    }
   }
 
   async function handleSessionPaymentStatus(id: number, payment_status: PaymentStatus, changed_by_name: string) {
@@ -521,7 +532,7 @@ export default function PatientProfilePage() {
                 showPatient={false}
                 onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshPatientAndSessions(); showToast("Session cancelled.", "success"); }}
                 onComplete={async (id, charges, notes) => { await completeSession(id, charges, notes); await refreshPatientAndSessions(); showToast("Session completed.", "success"); }}
-                onDelete={async (id) => { await deleteSession(id); await refreshSessions(); showToast("Session deleted.", "success"); }}
+                onDelete={handleSessionDelete}
                 onReschedule={handleSessionReschedule}
                 onNoShow={handleSessionNoShow}
                 onPaymentStatusChange={handleSessionPaymentStatus}
@@ -818,7 +829,7 @@ export default function PatientProfilePage() {
             showPatient={false}
             onCancel={async (id, reason) => { await cancelSession(id, reason); await refreshPatientAndSessions(); showToast("Session cancelled.", "success"); }}
             onComplete={async (id, charges, notes) => { await completeSession(id, charges, notes); await refreshPatientAndSessions(); showToast("Session completed.", "success"); }}
-            onDelete={async (id) => { await deleteSession(id); await refreshSessions(); showToast("Session deleted.", "success"); }}
+            onDelete={handleSessionDelete}
             onReschedule={handleSessionReschedule}
             onNoShow={handleSessionNoShow}
             onPaymentStatusChange={handleSessionPaymentStatus}

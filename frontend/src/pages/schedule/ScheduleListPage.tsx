@@ -6,6 +6,7 @@ import Layout from "../../components/layout/Layout";
 import AddSessionModal from "../../components/schedule/AddSessionModal";
 import SessionsTable from "../../components/schedule/SessionsTable";
 import SessionMeetingCell from "../../components/schedule/SessionMeetingCell";
+import { retryMeetingToast, serverMessage } from "../../components/schedule/meetingToast";
 import ClinicalNotesPanel from "../../components/schedule/ClinicalNotesPanel";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
@@ -131,7 +132,12 @@ export default function ScheduleListPage() {
 
   async function handleDelete(id: number) {
     try { await deleteSession(id); void fetchSessions(); showToast("Session deleted.", "success"); }
-    catch { showToast("Failed to delete session.", "error"); }
+    catch (err) {
+      // A delete can now be legitimately refused when the session's Google Calendar event is
+      // still live (MEET-02/M1). That message tells the admin exactly what to do next, so surface
+      // it instead of a generic failure.
+      showToast(serverMessage(err, "Failed to delete session."), "error");
+    }
   }
 
   async function handleReschedule(id: number, payload: { session_date: string; start_time: string; duration_mins: number; notes?: string }) {
@@ -149,15 +155,14 @@ export default function ScheduleListPage() {
     catch { showToast("Failed to update payment status.", "error"); }
   }
 
+  // One retry action, two outcomes — the backend decides from the session's meeting state whether
+  // it is provisioning a meeting or removing a stale calendar event (MEET-02).
   async function handleRetryMeeting(id: number) {
     try {
       const updated = await retryMeeting(id);
       void fetchSessions();
-      showToast(
-        updated.meetingStatus === "ACTIVE" ? "Google Meet link generated." : "Could not generate the meeting. Please try again.",
-        updated.meetingStatus === "ACTIVE" ? "success" : "error"
-      );
-    } catch { showToast("Failed to retry meeting generation.", "error"); }
+      showToast(...retryMeetingToast(updated.meetingStatus));
+    } catch { showToast("Failed to retry the calendar action.", "error"); }
   }
 
   function resetFilters() {

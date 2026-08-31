@@ -78,11 +78,31 @@ export default function SessionMeetingCell({ session, onRetry, layout = "cell" }
     );
   }
 
-  if (status === "FAILED") {
+  // Three states need a Retry affordance, and the retry means different things in each — the
+  // backend decides which from the session's own meeting state, so this component only has to
+  // show the right words (MEET-02).
+  //
+  //   FAILED         → provisioning failed, no meeting exists      → "Retry" creates one
+  //   CANCEL_FAILED  → a live event could not be removed           → "Retry" removes it
+  //   PENDING        → provisioning never completed (e.g. the      → "Retry" creates one
+  //                    database write after a Google create died)
+  //
+  // PENDING previously rendered as a bare dash with no way out, which left the admin unable to
+  // recover a session whose meeting silently never finished setting up.
+  const retryable =
+    status === "FAILED"
+      ? { text: "⚠ Unable to generate meeting", label: "Retry" }
+      : status === "CANCEL_FAILED"
+      ? { text: "⚠ Calendar event not cancelled", label: "Retry Cancellation" }
+      : status === "PENDING"
+      ? { text: "Meeting setup pending", label: "Retry" }
+      : null;
+
+  if (retryable) {
     return (
       <div style={wrap}>
         <span style={{ color: "#92400e", fontSize: 11 }} title={session.meetingError ?? undefined}>
-          {"⚠"} Unable to generate meeting
+          {retryable.text}
         </span>
         {onRetry && (
           <button
@@ -95,14 +115,13 @@ export default function SessionMeetingCell({ session, onRetry, layout = "cell" }
               whiteSpace: "nowrap", alignSelf: "flex-start",
             }}
           >
-            {retrying ? "Retrying…" : "Retry"}
+            {retrying ? "Retrying…" : retryable.label}
           </button>
         )}
       </div>
     );
   }
 
-  // PENDING (provisioning is synchronous, so this is only visible if a request died mid-flight)
-  // and CANCELLED both have nothing for the admin to act on.
+  // CANCELLED — the external event is gone and there is nothing left to act on.
   return <span style={{ color: "#b8c4cc" }}>{"—"}</span>;
 }

@@ -150,7 +150,7 @@ Auto-restarts on any `.ts` file change. Runs on port **3001**.
   meetingProvider: string | null;   // "google_meet"
   googleEventId: string | null;     // external Calendar event id (UNIQUE index in Postgres)
   meetingLink: string | null;       // https://meet.google.com/xxx-xxxx-xxx
-  meetingStatus: "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED" | null;
+  meetingStatus: "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED" | "CANCEL_FAILED" | null;
   meetingError: string | null;      // surfaced to admins behind the FAILED state
   patient: { id: number; name: string };
   therapist: { id: number; name: string };
@@ -475,7 +475,7 @@ therapySessionsService.ts  →  sessionMeetingService.ts  →  googleCalendarSer
 |---|---|---|
 | `provisionSessionMeeting(id)` | `createSession`, `rescheduleSession` (after commit) | Creates event + Meet, invites available attendees, compare-and-swaps the result. No-ops if `googleEventId` is already set, or the session is not `upcoming`. |
 | `cancelSessionMeeting(id)` | `cancelSession`, `deleteSession`, `rescheduleSession` (on the original) | Deletes the event (Google notifies attendees), clears the dead link. On failure keeps `googleEventId` + records `meetingError` for a later retry. |
-| `retrySessionMeeting(id)` | `POST /:id/meeting/retry` | Clears the stale error, then re-provisions. Idempotent. |
+| `retrySessionMeeting(id)` | `POST /:id/meeting/retry` | Routes by state: a `CANCEL_FAILED` session retries *cancellation*; anything else retries provisioning. One endpoint, two jobs — which is why no second endpoint was added. |
 
 **`SessionMeetingCell.tsx`** (frontend) — one component rendering all three admin-visible states, used by **both** the desktop `SessionsTable` and the mobile `MobileSessionCard` in `ScheduleListPage`, so the two branches cannot drift (see CLAUDE.md rule #2):
 
@@ -483,11 +483,13 @@ therapySessionsService.ts  →  sessionMeetingService.ts  →  googleCalendarSer
 |---|---|
 | `ACTIVE` | the Meet link + `Copy Link` |
 | `FAILED` | “⚠ Unable to generate meeting” + `Retry` (hover shows `meetingError`) |
-| `PENDING` / `CANCELLED` | muted em-dash |
+| `PENDING` | "Meeting setup pending" + `Retry` (MEET-02 — was a dead end before) |
+| `CANCEL_FAILED` | "⚠ Calendar event not cancelled" + `Retry Cancellation` |
+| `CANCELLED` | muted em-dash |
 | `null` | muted em-dash (sessions predating the feature) |
 
 **Gotchas.**
-- Provisioning is synchronous within the request, so `PENDING` is effectively invisible in normal operation — it only persists if a process died mid-flight. No loading state was added for it.
+- Provisioning is synchronous within the request, so `PENDING` is rare — but it is reachable (a database write that fails after Google created the event, or a process that dies mid-flight), and since MEET-02 it is **not** a dead end: it renders "Meeting setup pending" with a Retry, and the retry re-adopts the existing event rather than creating a second one.
 - Attendees are best-effort. A missing patient or therapist email does **not** fail provisioning; that person is simply not invited.
 - The event title carries no patient name and no clinical content — deliberately, see SPEC.md.
 - Local dev without Google env vars is a supported path: sessions schedule normally and land on `FAILED` with a “not configured” error, which is exactly what the Retry UI is for.

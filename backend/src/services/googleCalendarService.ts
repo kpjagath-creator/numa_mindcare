@@ -45,13 +45,50 @@ export interface CreateEventInput {
   timeZone: string;
   /** Already filtered to present, valid addresses by the caller. May be empty. */
   attendeeEmails: string[];
-  /** Opaque Numa-side key echoed into the Google request for traceability. */
-  requestId: string;
+  /** Deterministic client-specified event id — see `buildEventId`. */
+  eventId: string;
 }
 
 export interface CreatedEvent {
   eventId: string;
   meetLink: string | null;
+  /**
+   * True when the event already existed on Google and was re-adopted rather than created. No new
+   * invitations were sent in that case — Google refused the insert with 409 before doing anything.
+   */
+  adopted: boolean;
+}
+
+// ── Deterministic event identity (MEET-02) ─────────────────────────────────────
+//
+// The Numa session id derives the Google event id, so the external event stays discoverable even
+// if Numa never manages to persist it. This is what makes a failed database write-back after a
+// successful `events.insert` recoverable instead of permanently orphaning a real appointment.
+//
+// Google's id rules (events.insert reference): characters must come from the base32hex alphabet —
+// lowercase `a`–`v` and digits `0`–`9` — with a length of 5 to 1024, unique per calendar. Note
+// what that excludes: hyphens and the letters w–z. A format like "numa-session-123" is *invalid*
+// and Google rejects it with 400.
+//
+// "numasession" uses only a–v, and the session id contributes only digits, so the result is always
+// valid; the shortest possible value ("numasession1") is 12 characters, comfortably over the
+// 5-character floor.
+//
+// !! OPERATIONAL CONSTRAINT !! The id is unique *per calendar*, not globally. Two deployments
+// sharing one Google calendar would derive the same id for their respective session #42 and would
+// silently adopt each other's events. Every environment must therefore use its own dedicated
+// Google account or its own GOOGLE_CALENDAR_ID — see backend/.env.example.
+const EVENT_ID_PREFIX = "numasession";
+const VALID_EVENT_ID = /^[a-v0-9]{5,1024}$/;
+
+export function buildEventId(sessionId: number): string {
+  const id = `${EVENT_ID_PREFIX}${sessionId}`;
+  // Cheap guard against a future prefix edit silently producing ids Google rejects with a 400
+  // that would otherwise look like a generic integration failure.
+  if (!VALID_EVENT_ID.test(id)) {
+    throw new GoogleCalendarError(`Derived Google event id "${id}" is not a valid Calendar event id.`);
+  }
+  return id;
 }
 
 /** Thrown for any Google-side failure. Always safe to log — carries no credential material. */
@@ -158,14 +195,19 @@ export async function createEventWithMeet(input: CreateEventInput): Promise<Crea
   const token = await getAccessToken(config);
 
   const body = {
+    // Deterministic id (MEET-02). This is what makes the insert re-attemptable: a second insert
+    // with the same id is refused with 409 rather than creating a second appointment.
+    id: input.eventId,
     summary: input.summary,
     start: { dateTime: input.startTime.toISOString(), timeZone: input.timeZone },
     end: { dateTime: input.endTime.toISOString(), timeZone: input.timeZone },
     attendees: input.attendeeEmails.map((email) => ({ email })),
     // conferenceDataVersion=1 (below) + this createRequest is what provisions the Meet link.
+    // requestId only dedupes conference creation *within a single event*; it does not prevent
+    // duplicate events across separate insert calls — the deterministic event id above does that.
     conferenceData: {
       createRequest: {
-        requestId: input.requestId,
+        requestId: input.eventId,
         conferenceSolutionKey: { type: "hangoutsMeet" },
       },
     },
@@ -186,6 +228,24 @@ export async function createEventWithMeet(input: CreateEventInput): Promise<Crea
     body: JSON.stringify(body),
   });
 
+  // 409 "The requested identifier already exists" means this session's event is already on the
+  // calendar — from an earlier attempt whose database write-back failed, or from a concurrent
+  // request that won. Google created nothing and sent nothing on this call, so re-adopting the
+  // existing event is both correct and invitation-silent.
+  if (res.status === 409) {
+    const existing = await getEvent(input.eventId);
+    if (existing && !existing.cancelled) {
+      return { eventId: existing.eventId, meetLink: existing.meetLink, adopted: true };
+    }
+    // The id is taken by an event that has since been cancelled. Google keeps cancelled ids
+    // reserved, so this one can never be re-inserted; surface it rather than looping on a retry
+    // that cannot succeed.
+    throw new GoogleCalendarError(
+      `Google Calendar event id ${input.eventId} already belongs to a cancelled event and cannot be reused.`,
+      409
+    );
+  }
+
   if (!res.ok) {
     const code = await readErrorCode(res);
     throw new GoogleCalendarError(
@@ -202,7 +262,49 @@ export async function createEventWithMeet(input: CreateEventInput): Promise<Crea
 
   if (!json.id) throw new GoogleCalendarError("Google Calendar event creation returned no event id.");
 
-  return { eventId: json.id, meetLink: extractMeetLink(json) };
+  return { eventId: json.id, meetLink: extractMeetLink(json), adopted: false };
+}
+
+export interface FetchedEvent {
+  eventId: string;
+  meetLink: string | null;
+  /** Google keeps cancelled events retrievable for a period; such an event is not usable. */
+  cancelled: boolean;
+}
+
+/**
+ * Fetches one event by id. Returns null when it does not exist (404/410) — the caller treats that
+ * as "nothing to adopt" rather than an error.
+ */
+export async function getEvent(eventId: string): Promise<FetchedEvent | null> {
+  const config = getGoogleCalendarConfig();
+  if (!config) throw new GoogleCalendarError("Google Calendar is not configured.");
+
+  const token = await getAccessToken(config);
+  const url = `${CALENDAR_API}/calendars/${encodeURIComponent(config.calendarId)}/events/${encodeURIComponent(eventId)}`;
+
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
+  if (res.status === 404 || res.status === 410) return null;
+
+  if (!res.ok) {
+    const code = await readErrorCode(res);
+    throw new GoogleCalendarError(
+      `Google Calendar event lookup failed (${res.status}${code ? `: ${code}` : ""}).`,
+      res.status
+    );
+  }
+
+  const json = (await res.json()) as {
+    id?: string;
+    status?: string;
+    hangoutLink?: string;
+    conferenceData?: { entryPoints?: { entryPointType?: string; uri?: string }[] };
+  };
+
+  if (!json.id) return null;
+
+  return { eventId: json.id, meetLink: extractMeetLink(json), cancelled: json.status === "cancelled" };
 }
 
 function extractMeetLink(event: {

@@ -62,6 +62,10 @@ const RACE_CONFLICT_MESSAGE =
 //      contract (they record FAILED and resolve rather than throw); this helper is a second belt
 //      so an unexpected throw still cannot propagate into the scheduling path and surface as a
 //      failed booking for a session that is, in fact, booked.
+function toMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 async function attachMeeting(
   session: TherapySession,
   run: () => Promise<SessionMeetingState>
@@ -339,12 +343,33 @@ export async function completeSession(id: number, input: CompleteSessionInput): 
 
 export async function deleteSession(id: number): Promise<void> {
   await getSessionById(id);
-  // Delete is a hard delete — cancel the external event first, or it would be orphaned as a live
-  // appointment on the patient's and therapist's calendars with no Numa row left to retry from.
-  // Best-effort by contract: a Google failure must not block deleting the Numa session.
-  await cancelSessionMeeting(id).catch((err) =>
-    console.error(`[meeting] session ${id}: unexpected integration error on delete`, err)
-  );
+
+  // Delete is a hard delete, and the session row is the only place the external calendar event id
+  // lives. So this is the one place where a Google failure legitimately blocks a Numa operation:
+  // deleting the row while the event is still live would strand a real appointment on the
+  // patient's and therapist's calendars with nothing left to cancel it from — unrecoverable, and
+  // invisible to the clinic (MEET-02/M1).
+  //
+  // Note this does not weaken the scheduling invariant: that invariant protects sessions being
+  // *created*, and nothing here can invalidate an existing session. Refusing a destructive
+  // operation we cannot complete safely is the conservative direction.
+  const meeting = await cancelSessionMeeting(id).catch((err) => {
+    console.error(`[meeting] session ${id}: unexpected integration error on delete`, err);
+    // Database-level failure — we genuinely don't know the event's state, so don't destroy the row.
+    return { googleEventId: "unknown", meetingError: toMessage(err) } as Partial<SessionMeetingState>;
+  });
+
+  if (meeting.googleEventId) {
+    throw Object.assign(
+      new Error(
+        "This session's Google Calendar event could not be cancelled, so the session was not deleted — " +
+          "deleting it now would leave the meeting on the attendees' calendars with no way to remove it. " +
+          "Retry the calendar cancellation from the session's Google Meet column, then delete."
+      ),
+      { statusCode: 409 }
+    );
+  }
+
   await prisma.therapySession.delete({ where: { id } });
 }
 

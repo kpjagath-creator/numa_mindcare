@@ -83,8 +83,10 @@ export type PaymentStatus = "unpaid" | "paid" | "partial";
 export type SessionType = "therapy" | "discovery";
 
 // Google Calendar / Meet integration state (MEET-01). null = no meeting was ever attempted
-// (sessions predating the feature); CANCELLED = the external event has been removed.
-export type MeetingStatus = "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED";
+// (sessions predating the feature); CANCELLED = the external event has been removed;
+// CANCEL_FAILED = the external event is still live and Numa could not remove it (MEET-02) - the
+// event id is retained and the cancellation is retryable from the session UI.
+export type MeetingStatus = "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED" | "CANCEL_FAILED";
 
 export interface TherapySession {
   id: number;

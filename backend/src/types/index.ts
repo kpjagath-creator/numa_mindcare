@@ -137,8 +137,10 @@ export type SessionType = "therapy" | "discovery";
 
 // Google Calendar / Meet integration (MEET-01). Conceptual state of the external calendar
 // event that represents a session. A null column value means no meeting was ever attempted
-// (sessions created before this feature); CANCELLED means the external event is gone.
-export const MEETING_STATUSES = ["PENDING", "ACTIVE", "FAILED", "CANCELLED"] as const;
+// (sessions created before this feature); CANCELLED means the external event is gone; CANCEL_FAILED
+// means the external event is still live and Numa could not remove it (MEET-02) - the event id is
+// retained and the cancellation is retryable from the session UI.
+export const MEETING_STATUSES = ["PENDING", "ACTIVE", "FAILED", "CANCELLED", "CANCEL_FAILED"] as const;
 export type MeetingStatus = (typeof MEETING_STATUSES)[number];
 
 export interface TherapySession {

@@ -21,6 +21,7 @@
 
 import prisma from "../lib/prisma";
 import {
+  buildEventId,
   cancelEvent,
   createEventWithMeet,
   getCalendarTimeZone,
@@ -104,8 +105,13 @@ async function writeState(sessionId: number, state: Partial<SessionMeetingState>
 /**
  * Creates the Google Calendar event + Meet conference for a session and records the result.
  *
- * Total by contract — never throws. Call only after the session's transaction has committed.
- * Safe to call repeatedly: a session that already has an external event is returned unchanged.
+ * Does not throw for any Google-side failure — those are recorded as FAILED and returned. It can
+ * still reject if the *database* is unreachable (every Prisma call here can throw); callers in
+ * `therapySessionsService` wrap it so that can never surface as a failed booking.
+ *
+ * Call only after the session's transaction has committed. Safe to call repeatedly: a session that
+ * already has an external event is returned unchanged, and since MEET-02 a session whose event was
+ * created but never persisted re-adopts that same event rather than creating a second one.
  */
 export async function provisionSessionMeeting(sessionId: number): Promise<SessionMeetingState> {
   const session = await prisma.therapySession.findUnique({
@@ -174,9 +180,10 @@ export async function provisionSessionMeeting(sessionId: number): Promise<Sessio
       endTime: session.endTime,
       timeZone: getCalendarTimeZone(),
       attendeeEmails,
-      // Google dedupes conference creation on requestId within an event — a stable per-session
-      // key keeps a retried create from minting a second conference.
-      requestId: `numa-session-${sessionId}`,
+      // Deterministic per-session id (MEET-02). A re-attempt after a failed database write-back
+      // collides with the existing event (409) and re-adopts it instead of creating a second
+      // appointment, so the same session never produces two sets of invitations.
+      eventId: buildEventId(sessionId),
     });
   } catch (err) {
     const message = toMessage(err);
@@ -203,10 +210,6 @@ export async function provisionSessionMeeting(sessionId: number): Promise<Sessio
   });
 
   if (claimed.count === 0) {
-    logIntegration(`session ${sessionId}: lost provisioning race — discarding duplicate event`);
-    await cancelEvent(created.eventId).catch((err) =>
-      logIntegration(`session ${sessionId}: could not discard duplicate event — ${toMessage(err)}`)
-    );
     const current = await prisma.therapySession.findUnique({
       where: { id: sessionId },
       select: {
@@ -217,10 +220,32 @@ export async function provisionSessionMeeting(sessionId: number): Promise<Sessio
         meetingError: true,
       },
     });
+
+    // Since MEET-02 the event id is derived from the session id, so a concurrent provisioning of
+    // *this* session converged on the very same event — one call created it, the other adopted it
+    // via 409. There is no duplicate to clean up, and deleting it here would cancel the real
+    // meeting the winner just recorded.
+    //
+    // The only case that still warrants cleanup is a stored id that differs from ours, which can
+    // only happen against a session provisioned before MEET-02 (random Google-assigned id). That
+    // genuinely is a second event and is discarded.
+    if (current?.googleEventId && current.googleEventId !== created.eventId) {
+      logIntegration(`session ${sessionId}: lost provisioning race to a pre-existing event — discarding duplicate`);
+      await cancelEvent(created.eventId).catch((err) =>
+        logIntegration(`session ${sessionId}: could not discard duplicate event — ${toMessage(err)}`)
+      );
+    } else {
+      logIntegration(`session ${sessionId}: concurrent provisioning converged on the same event`);
+    }
+
     return (current as SessionMeetingState | null) ?? NO_MEETING;
   }
 
-  logIntegration(`session ${sessionId}: meeting active (${attendeeEmails.length} attendee(s) invited)`);
+  logIntegration(
+    created.adopted
+      ? `session ${sessionId}: re-adopted existing calendar event (no new invitations sent)`
+      : `session ${sessionId}: meeting active (${attendeeEmails.length} attendee(s) invited)`
+  );
   return {
     meetingProvider: MEETING_PROVIDER_GOOGLE,
     googleEventId: created.eventId,
@@ -235,9 +260,10 @@ export async function provisionSessionMeeting(sessionId: number): Promise<Sessio
 /**
  * Cancels the Google Calendar event for a session; Google notifies the attendees.
  *
- * Total by contract — never throws. The Numa cancellation has already committed by the time this
- * runs and is never undone: a Google failure leaves the row ACTIVE with `meetingError` set, which
- * is the recoverable "cancellation pending" state (a later cancel/delete retries it).
+ * Does not throw for any Google-side failure (database errors can still reject — callers wrap it).
+ * The Numa cancellation has already committed by the time this runs and is never undone: a Google
+ * failure moves the row to CANCEL_FAILED with the event id retained, which the session UI shows as
+ * a warning and which `retrySessionMeeting` routes back to cancellation.
  */
 export async function cancelSessionMeeting(sessionId: number): Promise<SessionMeetingState> {
   const session = await prisma.therapySession.findUnique({
@@ -253,21 +279,40 @@ export async function cancelSessionMeeting(sessionId: number): Promise<SessionMe
 
   if (!session) return NO_MEETING;
 
-  // Nothing was ever provisioned — mark a never-created meeting as cancelled so it can't later be
-  // provisioned for a session that is no longer live, and so the UI stops offering Retry.
-  if (!session.googleEventId) {
-    if (session.meetingStatus === null) return NO_MEETING;
+  // Never provisioned at all — nothing to clean up anywhere.
+  if (!session.googleEventId && session.meetingStatus === null) return NO_MEETING;
+  if (!session.googleEventId && (session.meetingStatus === "CANCELLED" || session.meetingStatus === "ACTIVE")) {
+    return writeState(sessionId, { meetingStatus: "CANCELLED", meetingError: null });
+  }
+
+  // Which event to remove. Normally the stored id; but a session left PENDING or FAILED with no
+  // stored id may *still* have a live event on Google — that is precisely the failed-write-back
+  // window (MEET-02/M3). The deterministic id lets us clean that up instead of orphaning it.
+  // `cancelEvent` treats 404/410 as success, so this costs one call and is safe when no event
+  // exists. If Google is unreachable we cannot rule out a live event, so the failure is recorded
+  // rather than assumed benign.
+  const targetEventId = session.googleEventId ?? buildEventId(sessionId);
+  const speculative = session.googleEventId === null;
+
+  if (speculative && !isGoogleCalendarConfigured()) {
+    // No credentials means no event was ever created through this deployment; nothing is live.
     return writeState(sessionId, { meetingStatus: "CANCELLED", meetingError: null });
   }
 
   try {
-    await cancelEvent(session.googleEventId);
+    await cancelEvent(targetEventId);
   } catch (err) {
     const message = toMessage(err);
     logIntegration(`session ${sessionId}: calendar cancellation failed — ${message}`);
-    // Deliberately leaves googleEventId in place: the event still exists on Google and the id is
-    // what a retry needs. The Numa session stays cancelled regardless.
-    return writeState(sessionId, { meetingError: message });
+    // Retain (or now record) the event id: the external appointment is still live and this id is
+    // what a retry needs. CANCEL_FAILED is what makes that visible to staff and routes the Retry
+    // action to cancellation rather than provisioning. The Numa session stays cancelled/deleted-
+    // pending regardless — Google never reverses a Numa decision.
+    return writeState(sessionId, {
+      googleEventId: targetEventId,
+      meetingStatus: "CANCEL_FAILED",
+      meetingError: message,
+    });
   }
 
   logIntegration(`session ${sessionId}: calendar event cancelled`);
@@ -284,10 +329,27 @@ export async function cancelSessionMeeting(sessionId: number): Promise<SessionMe
 // ── retrySessionMeeting ────────────────────────────────────────────────────────
 
 /**
- * Admin-triggered retry after a failed provisioning. Idempotent: if an event was created in the
- * meantime it is returned as-is rather than duplicated.
+ * Admin-triggered retry. One action, two meanings — which one is decided by the session's own
+ * meeting state, not by the caller:
+ *
+ *   CANCEL_FAILED  → the external event is still live and needs removing → retry cancellation
+ *   anything else  → the session needs a meeting → retry provisioning
+ *
+ * This is why the retry endpoint did not need to split in two. Provisioning never runs for a
+ * CANCEL_FAILED session, so retrying cleanup can never accidentally mint a replacement event for
+ * a session that is cancelled or has been rescheduled away.
  */
 export async function retrySessionMeeting(sessionId: number): Promise<SessionMeetingState> {
+  const session = await prisma.therapySession.findUnique({
+    where: { id: sessionId },
+    select: { meetingStatus: true },
+  });
+  if (!session) return NO_MEETING;
+
+  if (session.meetingStatus === "CANCEL_FAILED") {
+    return cancelSessionMeeting(sessionId);
+  }
+
   // Clear the stale error first so a retry that fails again shows the *new* reason, and so a
   // concurrent reader never sees a stale FAILED alongside a fresh event.
   await prisma.therapySession.updateMany({

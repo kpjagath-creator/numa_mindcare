@@ -70,7 +70,7 @@ numa_mindcare/
 - **Patient** — `patientNumber` (unique), name, mobile, email, age, source, referredBy, `currentStatus`, optional `therapistId` (→ TeamMember, `onDelete: SetNull`). Has `statusLogs`, `assignments`, `sessions`.
 - **PatientStatusLog** — audit trail of status changes: previous/new status, who changed it, optional notes.
 - **TeamMember** — `employeeCode` (unique), name, `employeeType`, `email` (nullable — required for new records at the validator layer, absent on rows predating MEET-01), `isActive`. Relations: patients they're primary therapist for, session assignments, `TherapistAvailability`, `TherapistBlockout`.
-- **TherapySession** — patientId, teamMemberId, start/end time, `durationMins`, `status` (upcoming/completed/cancelled/no_show), `cancelReason`, `charges` (Decimal), `paymentStatus`, `noShowFee`, self-referential `rescheduledFromId`/`rescheduledTo` for reschedule chains, **`sessionType`** ("therapy" | "discovery", default "therapy" — the field that drives most workflow branching), `notes`, and the MEET-01 Google Calendar integration columns (`meetingProvider`, `googleEventId` UNIQUE, `meetingLink`, `meetingStatus`, `meetingError` — all nullable). Has many `ClinicalNote`.
+- **TherapySession** — patientId, teamMemberId, start/end time, `durationMins`, `status` (upcoming/completed/cancelled/no_show), `cancelReason`, `charges` (Decimal), `paymentStatus`, `noShowFee`, self-referential `rescheduledFromId`/`rescheduledTo` for reschedule chains, **`sessionType`** ("therapy" | "discovery", default "therapy" — the field that drives most workflow branching), `notes`, and the Google Calendar integration columns (`meetingProvider`, `googleEventId` UNIQUE — derived from the session id since MEET-02, `meetingLink`, `meetingStatus` = PENDING/ACTIVE/FAILED/CANCELLED/CANCEL_FAILED, `meetingError` — all nullable). Has many `ClinicalNote`.
 - **PatientAssignment** — historical therapist assignment records (assignedAt/unassignedAt/isActive) — separate from the single `Patient.therapistId` "current therapist" pointer.
 - **TherapistAvailability** — weekly recurring slots per therapist (dayOfWeek 0–6, startTime/endTime as "HH:MM" strings).
 - **TherapistBlockout** — one-off blocked dates (leave/holiday) per therapist.
@@ -442,8 +442,12 @@ to create the new event can never leave two live appointments on attendees' cale
    appointment on real people's calendars.
 3. `therapy_sessions.google_event_id` has a `UNIQUE` index as the database-level backstop.
 
-Plus a stable per-session conference `requestId` (`numa-session-<id>`) so a retried create cannot
-fork a second Meet conference.
+> **Corrected 2026-09-01 (MEET-02):** the original entry also claimed a stable per-session
+> conference `requestId` stopped a retried create from forking a second conference. That was
+> wrong — `conferenceData.createRequest.requestId` only dedupes conference creation *within one
+> event*; two `events.insert` calls produce two events regardless. The layers above also only
+> guaranteed at most one event **in the database**, not on Google. See §8g for what actually
+> closes this.
 
 ### Schema (migration `20260831120000_add_therapist_email_and_session_meeting`)
 
@@ -474,8 +478,10 @@ addresses are never logged — the integration logs a session id and an outcome 
 - **Local dev without Google env vars is a supported, exercised path**, not a broken one:
   sessions schedule normally and land on `FAILED` with a "not configured" error. That is exactly
   what the Retry UI is for, and it is what the test suite runs against.
-- `PENDING` is effectively invisible in normal operation because provisioning is synchronous
-  within the request. No loading state was added for it — deliberately.
+- `PENDING` is rare because provisioning is synchronous within the request, and no loading state
+  was added for it. **Corrected 2026-09-01 (MEET-02):** calling it "effectively invisible" was
+  wrong — it is reachable, and because the UI rendered it as a bare dash with no Retry it was a
+  dead end for the admin. It now offers a Retry like any other non-terminal state.
 - **Beware perl one-liners for TypeScript edits.** Several `${id}` template-literal
   interpolations were silently eaten during this change (perl read them as variables), producing
   a `PUT /team-members/` with no id that only surfaced during browser verification. Typecheck did
@@ -514,6 +520,106 @@ MEET-01 block proving the session survives (and the patient lifecycle still adva
 integration fails or throws. `teamMembersService.integration.test.ts` (7, real Postgres) proves
 the nullable-email behaviour an in-memory double cannot. `teamMemberValidators.test.ts` (10)
 covers required-on-create vs optional-on-edit.
+
+## 8g. Google Calendar lifecycle recovery — deterministic event identity (MEET-02) (2026-09-01)
+
+**Why this exists.** An independent post-implementation review of `63ced69` classified the Google
+integration **MATERIAL ISSUE — DO NOT ACCEPT YET**. The happy path, the service boundary, the
+transaction boundary and the privacy handling were all sound; the *cleanup* half of the lifecycle
+was not. Three paths could each permanently strand a live calendar event on a patient's calendar.
+
+**One root cause behind all of them:** `therapy_sessions.google_event_id` was the *only* record
+that an external event existed. Every path that cleared or deleted that row while the event was
+live lost it forever — and none of those paths checked whether the cleanup had actually worked.
+That matters most during the documented 7-day refresh-token expiry, when *every* Google call
+fails at once, so these were not exotic corners.
+
+### The fix: derive the event id from the session id
+
+`googleCalendarService.buildEventId(sessionId)` → `numasession<id>`, passed as the client-specified
+`id` on `events.insert`.
+
+Format is dictated by Google, not chosen: ids must use the **base32hex alphabet — lowercase `a`–`v`
+and digits `0`–`9`, length 5–1024, unique per calendar**. That excludes hyphens and `w`–`z`, so the
+obvious-looking `numa-session-123` is rejected with a 400. `numasession` uses only `a`–`v` and the
+session id contributes only digits, so the result is always valid; the shortest possible value is
+12 characters.
+
+A duplicate id returns **409 "The requested identifier already exists"** — Google creates nothing
+and sends nothing. The client treats that as the re-adopt signal, fetches the event with
+`events.get`, and returns it with `adopted: true`. An id belonging to a *cancelled* event is not
+re-adopted (Google keeps cancelled ids reserved, so it could never be re-inserted); that surfaces
+as an error rather than an infinite retry loop.
+
+**Honest limit, now documented rather than glossed:** Google states it "cannot guarantee that ID
+collisions will be detected at event creation time". This is a strong safeguard, not an absolute
+one. The docs no longer claim retry "never" creates a second event.
+
+### What each failure path does now
+
+| Path | Before | After |
+|---|---|---|
+| M3 — event created, database write-back fails | Event orphaned, id lost, retry created a **second** event | Retry collides on the deterministic id, re-adopts the existing event, persists it. No second invitation. |
+| M1 — hard delete while cancellation fails | Row deleted anyway; event live forever with nothing to cancel it from | `deleteSession` inspects the result and **rejects with 409**; the row (and the id) survive |
+| M2 — reschedule, old event cancellation fails | Old session stayed `ACTIVE`, looked healthy, retry was a no-op | Moves to `CANCEL_FAILED`, event id retained, warning + "Retry Cancellation" shown, retry re-attempts the cancel |
+| M4 — `PENDING` with no link | Bare dash, no recovery from the UI | "Meeting setup pending" + Retry |
+
+### Design decisions worth remembering
+
+- **`CANCEL_FAILED` is a new status, and it earns its place.** Reusing `FAILED` would have worked
+  functionally (the retry could discriminate on `googleEventId` presence), but staff would see
+  "Unable to generate meeting" on a session that *has* a meeting needing removal. No migration was
+  needed — `meeting_status` is a plain `String?` column, not a Postgres enum.
+- **One retry endpoint, two jobs.** `POST /:id/meeting/retry` was kept as-is;
+  `retrySessionMeeting` branches on the session's own meeting state — `CANCEL_FAILED` retries
+  cancellation, anything else retries provisioning. Provisioning never runs for a `CANCEL_FAILED`
+  session, so retrying cleanup can't mint a replacement event for a session that was rescheduled
+  away. No new endpoint, no new API contract.
+- **The compare-and-swap loser must no longer delete its event.** This is the subtle one. Before
+  MEET-02 the loser had created a *different* event and deleting it was correct. Now both racers
+  converge on the *same* deterministic id, so deleting it would cancel the real meeting the winner
+  just recorded. It now only discards an event whose id differs from the stored one — which can
+  only happen against a session provisioned before MEET-02 with a random Google-assigned id.
+- **Delete is the one place Google blocks a Numa operation** — and it blocks a *destructive* one,
+  which is the conservative direction. It does not weaken the scheduling invariant, which protects
+  sessions being *created*. Refusal also applies when the cancellation attempt itself errored: an
+  unknown event state is not a safe basis for a permanent delete.
+- **Speculative cleanup on cancel/delete.** A row with no stored id but a non-null meeting status
+  may still have a live event (the M3 window). Cancellation therefore targets the deterministic id
+  in that case; `cancelEvent` treats 404/410 as success, so it costs one call and is safe when no
+  event exists. Skipped entirely when Google isn't configured, since nothing could have been
+  created.
+
+### Backward compatibility
+
+No migration. Sessions provisioned by `63ced69` keep their random Google-assigned ids: gate #1 in
+`provisionSessionMeeting` returns before any insert when `googleEventId` is set, so those events
+are never re-inserted or replaced. Deterministic identity only applies where no id was ever
+persisted.
+
+### Documentation claims corrected
+
+The review found five claims the code did not support. All were fixed rather than restated:
+"total by contract — never throws" (Prisma calls can throw; `attachMeeting` is what holds the
+invariant), "one session maps to at most one Google event" (was true of the database only),
+`requestId` preventing duplicate events (it does not), retry "never creates a second event"
+(strong, not absolute), and cancellation being "recoverable" when no working retry path existed.
+
+### Known, explicitly deferred
+
+Out of scope by agreement and still open: M5 (conference `createRequest.status` is not polled, so
+an `ACTIVE` row with a null Meet link is still a dead end), M7 (no request timeout on the Google
+`fetch`, so a hanging call delays the booking response), M8 (the cached access token isn't
+invalidated on a 401).
+
+**Separate production-readiness blocker — timezone.** Verified read-only during this change and
+**confirmed**: `createSession` parses `new Date(\`${date}T${time}:00\`)` with no offset, i.e. in the
+*server's* local timezone, and `render.yaml` sets no `TZ` (Render containers are UTC). A "10:00"
+booking therefore becomes 10:00 UTC = 15:30 IST. This predates the Google work and already affects
+the database and the existing UI, but the integration now puts that wrong wall-clock time in front
+of patients in a calendar invitation. `GOOGLE_CALENDAR_TIMEZONE` does *not* mitigate it — the
+payload sends `dateTime` as an explicit UTC instant, so Google uses the offset and the `timeZone`
+field is inert. **Do not enable the integration in production until this is resolved.**
 
 ## 9. Local dev quick-start
 
