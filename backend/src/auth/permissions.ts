@@ -29,6 +29,7 @@ export const PERMISSIONS = [
 
   "team:read",
   "team:create",
+  "team:update",
   "team:delete",
 
   "availability:read",

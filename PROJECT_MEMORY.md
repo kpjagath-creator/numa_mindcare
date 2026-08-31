@@ -69,15 +69,15 @@ numa_mindcare/
 
 - **Patient** — `patientNumber` (unique), name, mobile, email, age, source, referredBy, `currentStatus`, optional `therapistId` (→ TeamMember, `onDelete: SetNull`). Has `statusLogs`, `assignments`, `sessions`.
 - **PatientStatusLog** — audit trail of status changes: previous/new status, who changed it, optional notes.
-- **TeamMember** — `employeeCode` (unique), name, `employeeType`, `isActive`. Relations: patients they're primary therapist for, session assignments, `TherapistAvailability`, `TherapistBlockout`.
-- **TherapySession** — patientId, teamMemberId, start/end time, `durationMins`, `status` (upcoming/completed/cancelled/no_show), `cancelReason`, `charges` (Decimal), `paymentStatus`, `noShowFee`, self-referential `rescheduledFromId`/`rescheduledTo` for reschedule chains, **`sessionType`** ("therapy" | "discovery", default "therapy" — the field that drives most workflow branching), `notes`. Has many `ClinicalNote`.
+- **TeamMember** — `employeeCode` (unique), name, `employeeType`, `email` (nullable — required for new records at the validator layer, absent on rows predating MEET-01), `isActive`. Relations: patients they're primary therapist for, session assignments, `TherapistAvailability`, `TherapistBlockout`.
+- **TherapySession** — patientId, teamMemberId, start/end time, `durationMins`, `status` (upcoming/completed/cancelled/no_show), `cancelReason`, `charges` (Decimal), `paymentStatus`, `noShowFee`, self-referential `rescheduledFromId`/`rescheduledTo` for reschedule chains, **`sessionType`** ("therapy" | "discovery", default "therapy" — the field that drives most workflow branching), `notes`, and the MEET-01 Google Calendar integration columns (`meetingProvider`, `googleEventId` UNIQUE, `meetingLink`, `meetingStatus`, `meetingError` — all nullable). Has many `ClinicalNote`.
 - **PatientAssignment** — historical therapist assignment records (assignedAt/unassignedAt/isActive) — separate from the single `Patient.therapistId` "current therapist" pointer.
 - **TherapistAvailability** — weekly recurring slots per therapist (dayOfWeek 0–6, startTime/endTime as "HH:MM" strings).
 - **TherapistBlockout** — one-off blocked dates (leave/holiday) per therapist.
 - **ClinicalNote** — free-form (not SOAP-structured) notes attached to a session, with `createdByName`.
 - **User** — `username` (unique, login identifier), `email` (optional), `passwordHash`, `role`, `teamMemberId`, `passwordChangedAt`, `isActive`. Backs username/password auth as of 2026-08-30 — see §8a.
 
-Migration history (`backend/prisma/migrations/`): init → add therapist-to-patient → add therapy sessions → add session status/duration → add session charges → add availability/reschedule/no-show/notes/payment → add session_type. This last migration is the one `context.md` documents in depth (it's the source of several "discovery vs therapy session" bugs that got fixed).
+Migration history (`backend/prisma/migrations/`): init → add therapist-to-patient → add therapy sessions → add session status/duration → add session charges → add availability/reschedule/no-show/notes/payment → add session_type → add user auth fields → add session overlap exclusion → add clinical note sign-off → add therapist email and session meeting (MEET-01, 2026-09-01). The session_type migration is the one `context.md` documents in depth (it's the source of several "discovery vs therapy session" bugs that got fixed).
 
 ## 5. Backend API surface (`/api/v1`)
 
@@ -87,8 +87,8 @@ All routes below `/api/v1` except `/auth/login` require an authenticated session
 |---|---|---|
 | Auth | `/auth` | `POST /login` (public), `POST /logout`, `GET /me`, `POST /change-password` |
 | Patients | `/patients` | CRUD + `PATCH /:id/status`, `PATCH /:id/therapist`, `GET /:id/status-logs` |
-| Team members | `/team-members` | CRUD-ish + `GET /:id/patients` |
-| Therapy sessions | `/therapy-sessions` | create/list/get/delete + `/:id/cancel`, `/:id/complete`, `/:id/reschedule`, `/:id/no-show`, `/:id/payment-status`, `/therapist/:id` |
+| Team members | `/team-members` | CRUD-ish + `PUT /:id` (edit therapist, MEET-01), `GET /:id/patients` |
+| Therapy sessions | `/therapy-sessions` | create/list/get/delete + `/:id/cancel`, `/:id/complete`, `/:id/reschedule`, `/:id/no-show`, `/:id/payment-status`, `/:id/meeting/retry` (MEET-01), `/therapist/:id` |
 | Analytics | `/analytics` | `GET /dashboard`, `GET /revenue` |
 | Availability | `/availability` | `PUT/GET /therapist/:id/slots`, `POST/GET /therapist/:id/blockouts`, `DELETE /blockouts/:id` |
 | Clinical notes | `/clinical-notes` | `POST/GET /session/:sessionId`, `PUT/DELETE /:id` |
@@ -367,6 +367,153 @@ stale paths/backend port so `preview_start` actually works in this checkout, unr
 signed a clinical note with an amendment, confirmed the Timeline picked up the new events, attempted
 to book an unavailable therapist and got the backend's own rejection message, configured availability
 via a direct API call and confirmed the same booking then succeeded.
+
+## 8f. Google Meet session integration & automatic calendar invitations (MEET-01) (2026-09-01)
+
+**What changed.** Scheduling a session now also creates a Google Calendar event with a Google
+Meet conference on a dedicated Numa Google account, invites the patient and assigned therapist,
+and stores the resulting Meet link against the session. Admins can copy the link and retry a
+failed generation. Therapist email became mandatory on new onboarding, and a therapist edit
+capability was added because none existed.
+
+Evaluated up front per the task's mandatory gate. Classification: **PROCEED WITH MODIFICATIONS**
+— three material gaps between the proposed design and the actual repository/Google API were
+reported before any code was written; the user approved two and cut the third from scope.
+
+### Why the design had to change (the evaluation findings)
+
+1. **There was no therapist edit flow at all.** The task said to "add email to the existing
+   therapist edit flow". No such flow existed: no `PUT`/`PATCH` route, no `team:update`
+   permission, no update service function or validator, no edit UI anywhere in the frontend. The
+   whole edit capability had to be built, mirroring `PUT /patients/:id` → `updatePatientInfo`.
+2. **A service account cannot do this integration.** Creating a `hangoutsMeet` conference and
+   having Google deliver attendee invitations both require acting *as* a user, which requires
+   domain-wide delegation, which requires Google Workspace. The dedicated Numa account is a
+   consumer Gmail account, so OAuth 2.0 with a stored refresh token is the only viable mechanism
+   — not a preference, a constraint. **The 7-day trap:** while the Cloud Console OAuth app sits
+   in "Testing" publishing status, Google expires refresh tokens after 7 days; the integration
+   would work for a week and then fail silently with `invalid_grant`. The app must be published
+   to "In production" (full verification is *not* needed for one account — an unverified
+   production app shows a one-time interstitial and issues non-expiring tokens). This is a
+   deployment prerequisite outside the codebase and is now CLAUDE.md rule #11.
+3. **Calendar API v3 has no resend operation.** `sendUpdates=all` only emails attendees when the
+   event actually changes, so "resend invitation" would have required removing and re-adding the
+   attendee across two patched writes. Reported as a limitation; **the user cut invitation
+   resend from scope entirely** rather than accept the workaround. Google sends the initial
+   invitation at event creation and that is the whole of the invitation behaviour.
+
+### Architecture
+
+Dependency chain, strictly one-directional:
+
+```
+therapySessionsService  →  sessionMeetingService  →  googleCalendarService  →  Google
+   (scheduling rules)       (integration policy)        (HTTP surface only)
+```
+
+`therapySessionsService` contains no Google-specific logic — it calls three total functions.
+`googleCalendarService` contains no Numa business logic and touches no Prisma.
+
+**Two invariants drove every design decision:**
+
+- **No Google call inside a transaction.** `createSession`/`rescheduleSession` write
+  `meetingStatus: "PENDING"` *inside* the transaction (a local column write, not a network call)
+  and invoke the integration only after commit. An HTTP round-trip inside a transaction would
+  hold a database connection open for its duration, and — far worse — would make the existence
+  of a therapy session contingent on Google being reachable.
+- **Google failure never invalidates a Numa session.** Every entry point in
+  `sessionMeetingService` is *total*: it records a `FAILED` state and resolves rather than
+  throwing. `attachMeeting` in `therapySessionsService` wraps each call as a second belt, so even
+  an unexpected throw cannot surface to an admin as a failed booking. The same holds for
+  cancellation: a Google cancellation failure leaves the Numa session cancelled and records
+  `meetingError` as the recoverable "cancellation pending" state.
+
+**Reschedule chose Option B (cancel old event, create new)** — dictated by the existing domain
+model, not preference. `rescheduleSession` marks the original `rescheduled` and creates a *new*
+session row; both persist as real, queryable records. Updating one Google event in place would
+leave two Numa sessions pointing at one event and break the 1:1 mapping that cancellation and
+retry idempotency depend on. The two Google calls are ordered cancel-then-provision so a failure
+to create the new event can never leave two live appointments on attendees' calendars.
+
+**Duplicate prevention, three layers** (no locks, no queue, no new infrastructure):
+1. `provisionSessionMeeting` returns early if `googleEventId` is already set.
+2. The write-back is a compare-and-swap (`updateMany` on `{ id, googleEventId: null }`); the
+   loser of a race **deletes the event it just created** rather than orphaning a duplicate
+   appointment on real people's calendars.
+3. `therapy_sessions.google_event_id` has a `UNIQUE` index as the database-level backstop.
+
+Plus a stable per-session conference `requestId` (`numa-session-<id>`) so a retried create cannot
+fork a second Meet conference.
+
+### Schema (migration `20260831120000_add_therapist_email_and_session_meeting`)
+
+- `team_members.email TEXT` — **nullable on purpose.** Records predating this feature have no
+  email; a `NOT NULL` column would have failed the migration on existing rows and locked those
+  therapists out of every update path. Required-on-create lives in the Zod validator, not the
+  column. This asymmetry is the whole reason the edit capability exists.
+- `therapy_sessions`: `meeting_provider`, `google_event_id` (UNIQUE), `meeting_link`,
+  `meeting_status`, `meeting_error` — all nullable; null means no meeting was ever attempted.
+
+Migration was applied to the local `numa_test` database only. **Per CLAUDE.md rule #5, Render's
+free plan does not run `preDeployCommand` — this migration must be applied manually against
+production with `prisma migrate deploy` before/after the deploy.**
+
+### Privacy
+
+The calendar event title is `Therapy Session — Numa MindCare` or `Discovery Call — Numa MindCare`
+and nothing else. No patient name, no diagnosis, no clinical notes, no charges, no session notes
+leave Numa. Attendees cannot see each other's contact details or modify the event
+(`guestsCanSeeOtherGuests: false`, `guestsCanModify: false`). Tokens, secrets, and attendee email
+addresses are never logged — the integration logs a session id and an outcome only.
+
+### Lessons / gotchas for future work
+
+- **`sessionType` invariant survived intact.** `rescheduleSession` still copies
+  `sessionType: original.sessionType` explicitly (CLAUDE.md rule #1) — verified by an existing
+  test and re-verified live during this change.
+- **Local dev without Google env vars is a supported, exercised path**, not a broken one:
+  sessions schedule normally and land on `FAILED` with a "not configured" error. That is exactly
+  what the Retry UI is for, and it is what the test suite runs against.
+- `PENDING` is effectively invisible in normal operation because provisioning is synchronous
+  within the request. No loading state was added for it — deliberately.
+- **Beware perl one-liners for TypeScript edits.** Several `${id}` template-literal
+  interpolations were silently eaten during this change (perl read them as variables), producing
+  a `PUT /team-members/` with no id that only surfaced during browser verification. Typecheck did
+  not catch it — a template literal with a missing interpolation is still valid TypeScript.
+  Verify generated URLs in the browser, or use exact-string editing for code.
+
+### Files (backend)
+
+- `services/googleCalendarService.ts` (new) — OAuth refresh + Calendar v3 over `fetch`.
+- `services/sessionMeetingService.ts` (new) — integration policy, idempotency, state.
+- `services/therapySessionsService.ts` — `attachMeeting` seam; post-commit hooks on create /
+  reschedule / cancel / delete; new `retryMeeting`; meeting fields in `mapSession`.
+- `services/teamMembersService.ts` — `updateTeamMember` (new), email on create.
+- `auth/permissions.ts` — `team:update`.
+- `routes/teamMembers.ts` (`PUT /:id`), `routes/therapySessions.ts`
+  (`POST /:id/meeting/retry`), matching controllers, `validators/teamMemberValidators.ts`.
+- `package.json` — `engines.node >= 20` (global `fetch`).
+
+### Files (frontend)
+
+- `components/schedule/SessionMeetingCell.tsx` (new) — one component for all meeting states,
+  used by **both** the desktop table and the mobile card (CLAUDE.md rule #2).
+- `components/team/EditTeamMemberModal.tsx` (new) — shared by both team-list branches.
+- `SessionsTable.tsx` (Google Meet column), `ScheduleListPage.tsx` (mobile Meet block + retry
+  handler), `PatientProfilePage.tsx` (retry handler wired into both branches),
+  `TeamTable.tsx` (Email column + Edit), `TeamListPage.tsx`, `AddTeamMemberPage.tsx` (email
+  field), API clients and types.
+
+### Tests
+
+Suite grew 47 → 87, all passing. `sessionMeetingService.test.ts` (16) mocks the Google client at
+the module boundary — **no test in this repo makes a real Google API call.** Covers event
+creation, link persistence, attendee assembly with missing emails, failure recording, retry,
+compare-and-swap race loss, and cancellation failure. `therapySessionsService.test.ts` gained a
+MEET-01 block proving the session survives (and the patient lifecycle still advances) when the
+integration fails or throws. `teamMembersService.integration.test.ts` (7, real Postgres) proves
+the nullable-email behaviour an in-memory double cannot. `teamMemberValidators.test.ts` (10)
+covers required-on-create vs optional-on-edit.
 
 ## 9. Local dev quick-start
 

@@ -85,16 +85,25 @@ As of 2026-08-30 (Phase 2), this is an explicit backend capability — `transiti
 - **Cross-domain writes:** as of 2026-08-30 (Phase 2), `createSession`/`completeSession` no longer write `Patient`/`PatientStatusLog` directly — they call `patientLifecycleService.transitionPatientStatus(tx, ...)` (Patients domain) inside the same Prisma transaction as the session write, for the auto-advance rules in §6. See §5.
 
 ### Team / Therapists
-- **Owns:** team member CRUD, listing a therapist's assigned patients.
+- **Owns:** team member CRUD (create, read, update, delete), listing a therapist’s assigned patients.
 - **Key entities:** `TeamMember`.
 - **Behavior:** `backend/src/services/teamMembersService.ts`.
 - **Depends on:** none beyond its own table (patients-by-therapist listing reads `Patient` for display, read-only).
+- **Therapist email (MEET-01, 2026-09-01):** `TeamMember.email` is a nullable column with a required-on-create validator. The asymmetry is deliberate: records predating the Google Calendar integration have no email, so a `NOT NULL` column would have made the migration fail on existing rows and locked those therapists out of every update path. `updateTeamMember` (added with this feature — there was no therapist edit capability before it) is the repair path, gated by the new `team:update` permission and mirroring `patientsService.updatePatientInfo`’s partial-update shape.
 
 ### Availability
 - **Owns:** weekly recurring availability slots and one-off blockout dates per therapist.
 - **Key entities:** `TherapistAvailability`, `TherapistBlockout`.
 - **Behavior:** `backend/src/services/availabilityService.ts`. Implemented as its own service file, though the entities are conceptually "team" data (see §4 note on `TeamMember`'s relations).
 - **Depends on:** `TeamMember` (existence check).
+
+### Meeting Integration (Google Calendar → Google Meet)
+- **Owns:** the external Google Calendar event that represents a Numa session, and the integration state recorded against that session (`meetingProvider`, `googleEventId`, `meetingLink`, `meetingStatus`, `meetingError`).
+- **Key entities:** none of its own — it writes only the meeting columns on `TherapySession`.
+- **Behavior:** `backend/src/services/sessionMeetingService.ts` (policy: idempotency, attendee assembly, failure recording) over `backend/src/services/googleCalendarService.ts` (the only module that knows Google’s HTTP surface exists).
+- **Depends on:** `TherapySession`, and read-only on `Patient.email` / `TeamMember.email` to assemble attendees.
+- **Depended on by:** Scheduling, and only through three total functions (`provisionSessionMeeting`, `cancelSessionMeeting`, `retrySessionMeeting`). `therapySessionsService` contains no Google-specific logic.
+- **Direction of dependency:** Scheduling → Meeting Integration → Google. Never the reverse. Google Calendar is an **external projection** of a Numa session, never a source of truth for one; nothing in the system reads scheduling state back out of Google.
 
 ### Clinical notes
 - **Owns:** free-form (non-SOAP) notes attached to a session.
@@ -127,8 +136,8 @@ Verified against `backend/prisma/schema.prisma` (single schema, single `PrismaCl
 | `Patient` | Patients | Also written by Scheduling (see §5) |
 | `PatientStatusLog` | Patients | Also written by Scheduling (see §5) |
 | `PatientAssignment` | Patients | Historical assignment records, separate from `Patient.therapistId` |
-| `TherapySession` | Scheduling | Includes payment/charge fields — billing is not a separate table |
-| `TeamMember` | Team | |
+| `TherapySession` | Scheduling | Includes payment/charge fields — billing is not a separate table. Google Calendar integration state (`meetingProvider`, `googleEventId`, `meetingLink`, `meetingStatus`, `meetingError`) written only by Meeting Integration (see §3) |
+| `TeamMember` | Team | Nullable `email` (MEET-01) — required for new records at the validator layer, absent on pre-2026-09-01 rows |
 | `TherapistAvailability` | Availability | Relationally hangs off `TeamMember`, but has its own service |
 | `TherapistBlockout` | Availability | Relationally hangs off `TeamMember`, but has its own service |
 | `ClinicalNote` | Clinical notes | Scoped to a `TherapySession`, not to `Patient` directly. Sign-off state (`status`/`signedAt`/`signedByName`) as of 2026-08-30 |
@@ -173,7 +182,11 @@ These are invariants the current implementation enforces (or documents) today. P
 9. **Availability-aware scheduling (SCH-04/SCH-20), added 2026-08-30:** a session may only be created (or rescheduled) for a therapist who is `isActive`, within one of their `TherapistAvailability` weekly windows for that day, and not on a `TherapistBlockout` date. Enforced in `therapySessionsService.ts` (`assertTherapistAvailable`), inside the same transaction as the conflict checks and the write. The frontend (`AddSessionModal.tsx`) shows a live availability indicator as a UX aid; it is never the authoritative check. A session-buffer requirement (SCH-13) was explicitly deferred — no buffer concept exists in the schema or booking logic today; see PROJECT_MEMORY.md's dated entry.
 10. **Clinical note sign-off (CLN-07), added 2026-08-30:** a `ClinicalNote` starts as `status: "draft"` (mutable). Signing it (`clinicalNotesService.signNote`) is a compare-and-swap transition — conditional on `status: "draft"` — that sets `signedAt`/`signedByName` and makes the row immutable: `updateNote`/`deleteNote` reject a signed note with `409`. Further changes to a signed note are recorded as `ClinicalNoteAmendment` rows (append-only, never mutate the original). Gated by the `clinical_notes:sign` permission (sign) and `clinical_notes:update` (amend), both in the centralized RBAC map — no scattered role checks.
 
-Anything not listed above (e.g., specific UI copy, button colors, exact status label text) is a UI/UX detail, not a business invariant, and is out of scope for this document.
+11. **Google Calendar integration never affects session validity (MEET-01), added 2026-09-01:** a `TherapySession` is valid, scheduled, and committed independently of Google. Every entry point in `sessionMeetingService` is *total* — it records a `FAILED`/error state and resolves rather than throwing — and `therapySessionsService.attachMeeting` wraps each call as a second belt so an unexpected throw still cannot surface as a failed booking. Correspondingly, a Google **cancellation** failure never undoes a Numa cancellation: the row keeps `googleEventId` and gains `meetingError`, which is the recoverable “cancellation pending” state. Verified in `backend/src/services/__tests__/sessionMeetingService.test.ts` and the MEET-01 block of `therapySessionsService.test.ts`.
+12. **One Numa session maps to at most one Google Calendar event (MEET-01), added 2026-09-01:** enforced by three layers — `provisionSessionMeeting` returns early for a session that already has a `googleEventId`; the write-back is a compare-and-swap (`updateMany` on `{ id, googleEventId: null }`) whose loser deletes the event it just created rather than orphaning a duplicate appointment; and `therapy_sessions.google_event_id` carries a `UNIQUE` index as the database-level backstop. The Meet conference itself uses a stable per-session `requestId` (`numa-session-<id>`) so a retried create cannot fork a second conference.
+
+Anything not listed above
+ (e.g., specific UI copy, button colors, exact status label text) is a UI/UX detail, not a business invariant, and is out of scope for this document.
 
 ---
 
@@ -195,9 +208,25 @@ Operations that read-then-write outside a single transaction (e.g., `cancelSessi
 
 **Concurrency-safe booking (SCH-05), fixed 2026-08-30:** scheduling-conflict detection (`createSession`, `rescheduleSession`) still runs a `findFirst` overlap check *inside* the transaction, for a fast/friendly rejection message — but this alone was never sufficient, since Prisma's default transaction isolation (Postgres `READ COMMITTED`) does not prevent two concurrent transactions from both reading "no conflict" before either commits (a classic check-then-act race). The actual invariant is now enforced by two partial Postgres `EXCLUDE` constraints on `therapy_sessions` (migration `20260830094335_add_session_overlap_exclusion`, requires the `btree_gist` extension): `(patient_id, tsrange(start_time, end_time))` and `(team_member_id, tsrange(start_time, end_time))`, both scoped to `status NOT IN ('cancelled','rescheduled','no_show')`. A write that races past the `findFirst` check and violates the constraint gets a Postgres `23P01` exclusion-violation error, which the service layer (`isExclusionViolation` in `therapySessionsService.ts`) catches and translates into the same 409 conflict shape the `findFirst` path returns. No locking, event system, or CQRS was introduced — this is a database constraint, the smallest mechanism that actually closes the race. Verified with real concurrent requests against a local Postgres database (`backend/src/services/__tests__/therapySessionsService.integration.test.ts`) — see §11's testing note for why this repo now has that capability.
 
+**External API calls are outside every transaction boundary (MEET-01), added 2026-09-01.** No Google Calendar call is made inside a `prisma.$transaction`. `createSession` and `rescheduleSession` write a local `meetingStatus: “PENDING”` column *inside* the transaction — that is a database write, not a network call — and then invoke Meeting Integration only after the transaction has committed:
+
+```
+BEGIN TRANSACTION
+  create session (meetingStatus = PENDING)
+  patient lifecycle auto-advance + audit log
+COMMIT
+        ↓
+Google Calendar event + Meet conference
+        ↓
+compare-and-swap the result onto the session row
+```
+
+Two reasons this boundary is non-negotiable. First, an HTTP round-trip inside a transaction holds a database connection open for its whole duration — on a small connection pool behind Supabase’s session pooler, a slow or hanging Google call would starve unrelated requests. Second, and more important, it would make the *existence of a therapy session* contingent on a third party being reachable; a Google outage would surface to the admin as a failed booking for an appointment the clinic fully intends to keep. Rescheduling follows the same rule and additionally orders its two Google calls cancel-then-provision, so a failure to create the new event can never leave two live appointments on the attendees’ calendars.
+
 ---
 
 ## 8. API Architecture
+
 
 - **Versioning:** all routes are mounted under `/api/v1` (`routes/index.ts`), giving room for a future `/api/v2` without breaking existing clients.
 - **Resource boundaries:** one router file per resource (`patients`, `teamMembers`, `therapySessions`, `analytics`, `availability`, `clinicalNotes`), aggregated in `routes/index.ts`. `auth` is mounted separately and is the only public resource group (`POST /auth/login` is reachable unauthenticated; every other `/auth` route enforces `requireAuth` itself).
@@ -360,7 +389,11 @@ Decisions verifiable from the current repository. Where historical rationale (wh
 - **API versioning via `/api/v1` path prefix.** Verified: `routes/index.ts` mounts a single `v1Router`; no other version prefix exists yet, leaving room for a future `/api/v2`.
 - **Centralized RBAC via a static Role→Permission map**, not scattered role checks. Verified: `auth/permissions.ts` is the only file defining role/permission logic; `requirePermission` middleware is the only enforcement point. Current rationale (stated in the file's own comment): a new role should be addable "without touching route code."
 - **Cookie-based authentication (httpOnly JWT), not a bearer token in localStorage.** Verified: `auth/jwt.ts`, `auth/cookies.ts`, `frontend/src/api/api.ts` (`withCredentials: true`). Current rationale, per `PROJECT_MEMORY.md` §8c: avoids exposing the token to client-side JS/XSS, at the cost of needing the Vercel proxy workaround for first-party cookie behavior across the Vercel/Render domain split — that incident and fix are documented in `PROJECT_MEMORY.md` §8c, not restated here.
-- **Single-clinic architecture, no multi-tenancy.** Verified: no `clinicId`/`tenantId` or equivalent anywhere in `schema.prisma`; explicitly stated as a non-goal in SPEC.md §7.
+- **Google Calendar via OAuth 2.0 refresh token on a dedicated consumer account, not a service account (MEET-01, 2026-09-01).** Verified constraint, not preference: acting *as* a user — which is what creating a `hangoutsMeet` conference and having Google deliver attendee invitations both require — needs domain-wide delegation, and domain-wide delegation requires Google Workspace. The dedicated Numa account is a consumer Gmail account, so a service account cannot perform this integration at all. The implementation therefore exchanges a long-lived refresh token (a deployment secret) for access tokens at runtime. **Deployment prerequisite:** while the Cloud Console OAuth app is in “Testing” publishing status, Google expires refresh tokens after 7 days and the integration stops working silently; the app must be published to “In production” (full Google verification is *not* required for a single-account grant — an unverified production app shows a one-time consent interstitial and issues non-expiring tokens). See `backend/.env.example`.
+- **A hand-written Google Calendar client rather than the `googleapis` package (MEET-01, 2026-09-01).** Three REST calls (token refresh, event insert, event delete) did not justify a ~50MB dependency in a repo that deliberately keeps its dependency set small (§15). Cost: `backend/package.json` now pins `engines.node >= 20` for global `fetch`. Revisit if the integration grows past a handful of endpoints.
+- **Invitation resend deliberately excluded from the MVP (MEET-01, 2026-09-01).** Calendar API v3 has no resend operation, and `sendUpdates=all` only emails attendees when the event actually changes — so a resend would require removing and re-adding the attendee across two patched writes. That workaround was judged not worth its complexity and failure modes for the MVP; Google sends the initial invitation at event creation, and that is the entire invitation behaviour. Revisit only if the clinic reports invitations actually going astray.
+- **Single-clinic architecture, no multi-tenancy.**
+ Verified: no `clinicId`/`tenantId` or equivalent anywhere in `schema.prisma`; explicitly stated as a non-goal in SPEC.md §7.
 
 ---
 

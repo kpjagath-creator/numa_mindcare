@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { TherapySession, PaymentStatus } from "../../types/index";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import SessionActionsDropdown from "./SessionActionsDropdown";
+import SessionMeetingCell from "./SessionMeetingCell";
 
 interface Props {
   sessions: TherapySession[];
@@ -17,6 +18,7 @@ interface Props {
   onNoShow?: (id: number, no_show_fee?: number) => void;
   onPaymentStatusChange?: (id: number, payment_status: PaymentStatus, changed_by_name: string) => void;
   onNotes?: (session: TherapySession) => void;
+  onRetryMeeting?: (id: number) => void | Promise<void>;
 }
 
 function fmtTime(iso: string) {
@@ -69,7 +71,7 @@ function nextPaymentStatus(current: PaymentStatus): PaymentStatus {
 
 export default function SessionsTable({
   sessions, showPatient = true, showTherapist = true,
-  onCancel, onComplete, onDelete, onReschedule, onNoShow, onPaymentStatusChange, onNotes,
+  onCancel, onComplete, onDelete, onReschedule, onNoShow, onPaymentStatusChange, onNotes, onRetryMeeting,
 }: Props) {
   const [cancelId, setCancelId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
@@ -188,6 +190,7 @@ export default function SessionsTable({
               <th style={s.th}>Status</th>
               <th style={s.th}>Charges</th>
               <th style={s.th}>Payment</th>
+              <th style={s.th}>Google Meet</th>
               <th style={s.th}>Notes</th>
               {hasActions && <th style={s.th}>Actions</th>}
             </tr>
@@ -247,6 +250,9 @@ export default function SessionsTable({
                         {paymentKey.charAt(0).toUpperCase() + paymentKey.slice(1)}
                       </span>
                     )}
+                  </td>
+                  <td style={s.td}>
+                    <SessionMeetingCell session={sess} onRetry={onRetryMeeting} />
                   </td>
                   <td style={{ ...s.td, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {sess.cancelReason

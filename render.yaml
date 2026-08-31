@@ -15,3 +15,16 @@ services:
         value: https://numa-mindcare.vercel.app
       - key: NODE_ENV
         value: production
+      # Google Calendar / Meet integration (MEET-01). Secrets - set in the Render dashboard,
+      # never committed. See backend/.env.example for the OAuth production-publishing
+      # prerequisite (refresh tokens expire after 7 days while the app is in "Testing").
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_CALENDAR_ID
+        value: primary
+      - key: GOOGLE_CALENDAR_TIMEZONE
+        value: Asia/Kolkata

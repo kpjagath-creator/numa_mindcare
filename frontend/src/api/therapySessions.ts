@@ -78,6 +78,13 @@ export async function markNoShow(id: number, no_show_fee?: number): Promise<Ther
   return res.data.data.session;
 }
 
+// Retries Google Meet provisioning for a session whose meeting generation failed (MEET-01).
+// Idempotent server-side: never creates a second calendar event.
+export async function retryMeeting(id: number): Promise<TherapySession> {
+  const res = await api.post<{ success: true; data: { session: TherapySession } }>(`/therapy-sessions/${id}/meeting/retry`);
+  return res.data.data.session;
+}
+
 export async function updatePaymentStatus(id: number, payment_status: string, changed_by_name: string): Promise<TherapySession> {
   const res = await api.patch(`/therapy-sessions/${id}/payment-status`, { payment_status, changed_by_name });
   return res.data.data.session;

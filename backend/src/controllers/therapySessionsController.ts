@@ -116,6 +116,20 @@ export async function markNoShow(req: Request, res: Response, next: NextFunction
   } catch (err) { next(err); }
 }
 
+// ── POST /api/v1/therapy-sessions/:id/meeting/retry (MEET-01) ─────────────────
+//
+// Retries Google Meet provisioning after a failure. Idempotent: a session that already has a
+// calendar event is returned unchanged rather than getting a second one. Takes no body.
+
+export async function retryMeeting(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = parseId(req.params.id, res);
+    if (id === null) return;
+    const session = await sessionsService.retryMeeting(id);
+    sendSuccess(res, { session });
+  } catch (err) { next(err); }
+}
+
 // ── PATCH /api/v1/therapy-sessions/:id/payment-status ─────────────────────────
 
 export async function updatePaymentStatus(req: Request, res: Response, next: NextFunction): Promise<void> {

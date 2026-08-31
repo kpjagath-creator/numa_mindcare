@@ -5,6 +5,7 @@ import {
   addTeamMember,
   listTeamMembers,
   getTeamMember,
+  editTeamMember,
   removeTeamMember,
   getTeamMemberPatients,
 } from "../controllers/teamMembersController";
@@ -15,6 +16,7 @@ const router = Router();
 router.post("/", requirePermission("team:create"), addTeamMember);
 router.get("/", requirePermission("team:read"), listTeamMembers);
 router.get("/:id", requirePermission("team:read"), getTeamMember);
+router.put("/:id", requirePermission("team:update"), editTeamMember);
 router.delete("/:id", requirePermission("team:delete"), removeTeamMember);
 router.get("/:id/patients", requirePermission("team:read"), getTeamMemberPatients);
 

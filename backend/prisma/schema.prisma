@@ -47,6 +47,12 @@ model TeamMember {
   employeeCode    String                 @unique @map("employee_code")
   name            String
   employeeType    String                 @map("employee_type")
+  // Nullable by design (MEET-01): therapist records created before the Google Calendar
+  // integration have no email. New onboarding requires one at the validator layer, but the
+  // column must stay nullable so the migration cannot fail on existing rows and so those rows
+  // remain editable and bookable. A session for a therapist without an email is still scheduled
+  // and still gets a Meet link — that therapist simply is not added as a calendar attendee.
+  email           String?
   isActive        Boolean                @default(true) @map("is_active")
   createdAt       DateTime               @default(now()) @map("created_at")
   updatedAt       DateTime               @updatedAt @map("updated_at")
@@ -76,6 +82,16 @@ model TherapySession {
   rescheduledTo       TherapySession[] @relation("Reschedule")
   sessionType         String     @default("therapy") @map("session_type") // "therapy" | "discovery"
   notes               String?
+  // Google Calendar / Meet integration (MEET-01). Numa remains the source of truth for the
+  // session; these columns record the state of the external Google Calendar event that
+  // represents it. All nullable — sessions created before this feature legitimately have no
+  // meeting. meetingStatus: "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED" (null = never
+  // attempted). googleEventId is @unique so one external event can never be recorded twice.
+  meetingProvider     String?    @map("meeting_provider")   // "google_meet"
+  googleEventId       String?    @unique @map("google_event_id")
+  meetingLink         String?    @map("meeting_link")
+  meetingStatus       String?    @map("meeting_status")
+  meetingError        String?    @map("meeting_error")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
   patient             Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)

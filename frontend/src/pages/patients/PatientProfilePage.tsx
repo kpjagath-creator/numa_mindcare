@@ -14,7 +14,7 @@ import { getPatient, getStatusLogs, updatePatientStatus, updatePatientTherapist,
 import type { PatientTimelineEntry } from "../../api/patients";
 import PatientTimeline from "../../components/patients/PatientTimeline";
 import { listTeamMembers } from "../../api/teamMembers";
-import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus } from "../../api/therapySessions";
+import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus, retryMeeting } from "../../api/therapySessions";
 import { getNotesForSession } from "../../api/clinicalNotes";
 import type { ClinicalNote } from "../../api/clinicalNotes";
 import SessionsTable from "../../components/schedule/SessionsTable";
@@ -303,6 +303,18 @@ export default function PatientProfilePage() {
     catch { showToast("Failed to mark no-show.", "error"); }
   }
 
+  // Retry Google Meet provisioning for a session whose generation failed (MEET-01).
+  async function handleSessionRetryMeeting(id: number) {
+    try {
+      const updated = await retryMeeting(id);
+      await refreshSessions();
+      showToast(
+        updated.meetingStatus === "ACTIVE" ? "Google Meet link generated." : "Could not generate the meeting. Please try again.",
+        updated.meetingStatus === "ACTIVE" ? "success" : "error"
+      );
+    } catch { showToast("Failed to retry meeting generation.", "error"); }
+  }
+
   async function handleSessionPaymentStatus(id: number, payment_status: PaymentStatus, changed_by_name: string) {
     try { await updatePaymentStatus(id, payment_status, changed_by_name); await refreshSessions(); showToast("Payment status updated.", "success"); }
     catch { showToast("Failed to update payment status.", "error"); }
@@ -514,6 +526,7 @@ export default function PatientProfilePage() {
                 onNoShow={handleSessionNoShow}
                 onPaymentStatusChange={handleSessionPaymentStatus}
                 onNotes={(session) => setNotesSession(session)}
+                onRetryMeeting={handleSessionRetryMeeting}
               />
             </div>
           </CollapsibleCard>
@@ -810,6 +823,7 @@ export default function PatientProfilePage() {
             onNoShow={handleSessionNoShow}
             onPaymentStatusChange={handleSessionPaymentStatus}
             onNotes={(session) => setNotesSession(session)}
+            onRetryMeeting={handleSessionRetryMeeting}
           />
         </CollapsibleCard>
       )}

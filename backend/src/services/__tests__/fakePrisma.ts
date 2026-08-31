@@ -10,6 +10,8 @@ export type FakePatient = {
   patientNumber: string;
   currentStatus: string;
   therapistId: number | null;
+  // MEET-01: the address Google Calendar invites the patient at.
+  email: string;
 };
 
 export type FakeTeamMember = {
@@ -17,6 +19,8 @@ export type FakeTeamMember = {
   name: string;
   employeeType: string;
   isActive: boolean;
+  // MEET-01: nullable - therapist records predating the integration have no email.
+  email: string | null;
 };
 
 export type FakeAvailabilitySlot = {
@@ -49,6 +53,12 @@ export type FakeSession = {
   paymentStatus: string;
   noShowFee: number | null;
   cancelReason: string | null;
+  // MEET-01 Google Calendar integration state.
+  meetingProvider: string | null;
+  googleEventId: string | null;
+  meetingLink: string | null;
+  meetingStatus: string | null;
+  meetingError: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -142,9 +152,26 @@ function withParticipants(db: FakeDb, s: FakeSession) {
   const teamMember = db.teamMembers.get(s.teamMemberId);
   return {
     ...s,
-    patient: patient ? { id: patient.id, name: patient.name, patientNumber: patient.patientNumber } : null,
-    teamMember: teamMember ? { id: teamMember.id, name: teamMember.name, employeeType: teamMember.employeeType } : null,
+    // `email` is carried here so a `select` on the nested participant can reach it — MEET-01's
+    // provisioning reads patient.email / teamMember.email to build the attendee list.
+    patient: patient ? { id: patient.id, name: patient.name, patientNumber: patient.patientNumber, email: patient.email } : null,
+    teamMember: teamMember ? { id: teamMember.id, name: teamMember.name, employeeType: teamMember.employeeType, email: teamMember.email } : null,
   };
+}
+
+// Minimal `select` support: keeps only the requested scalar keys, and recurses into a nested
+// `{ select: {...} }` for the participant relations. Enough for the shapes the services under
+// test actually ask for — not a general Prisma select implementation.
+function project(row: any, select: any): any {
+  if (row === null || row === undefined) return row;
+  const out: any = {};
+  for (const [key, spec] of Object.entries(select)) {
+    if (spec === true) out[key] = row[key];
+    else if (spec && typeof spec === "object" && "select" in (spec as any)) {
+      out[key] = project(row[key], (spec as any).select);
+    }
+  }
+  return out;
 }
 
 /** Builds a fake Prisma-shaped client (usable both as the top-level client and as a `tx`). */
@@ -217,9 +244,11 @@ export function createFakeClient(db: FakeDb): any {
         }
         return null;
       },
-      findUnique: async ({ where }: any) => {
+      findUnique: async ({ where, select }: any) => {
         const s = db.sessions.get(where.id);
-        return s ? withParticipants(db, s) : null;
+        if (!s) return null;
+        const full = withParticipants(db, s);
+        return select ? project(full, select) : full;
       },
       create: async ({ data }: any) => {
         const id = db.nextSessionId++;
@@ -239,18 +268,40 @@ export function createFakeClient(db: FakeDb): any {
           paymentStatus: data.paymentStatus ?? "unpaid",
           noShowFee: data.noShowFee ?? null,
           cancelReason: data.cancelReason ?? null,
+          meetingProvider: data.meetingProvider ?? null,
+          googleEventId: data.googleEventId ?? null,
+          meetingLink: data.meetingLink ?? null,
+          meetingStatus: data.meetingStatus ?? null,
+          meetingError: data.meetingError ?? null,
           createdAt: now,
           updatedAt: now,
         };
         db.sessions.set(id, session);
         return withParticipants(db, session);
       },
-      update: async ({ where, data }: any) => {
+      update: async ({ where, data, select }: any) => {
         const existing = db.sessions.get(where.id);
         if (!existing) throw new Error("session not found");
         const updated = { ...existing, ...data, updatedAt: new Date() };
         db.sessions.set(where.id, updated);
-        return withParticipants(db, updated);
+        return select ? project(withParticipants(db, updated), select) : withParticipants(db, updated);
+      },
+      // Compare-and-swap, same contract as the patient.updateMany above: only rows matching every
+      // plain-equality field in `where` are mutated, and the matched count is reported. MEET-01's
+      // provisioning claim (`where: { id, googleEventId: null }`) depends on this.
+      updateMany: async ({ where, data }: any) => {
+        const existing = db.sessions.get(where.id);
+        if (!existing) return { count: 0 };
+        const matches = Object.entries(where).every(([key, val]) => (existing as any)[key] === val);
+        if (!matches) return { count: 0 };
+        db.sessions.set(where.id, { ...existing, ...data, updatedAt: new Date() });
+        return { count: 1 };
+      },
+      delete: async ({ where }: any) => {
+        const existing = db.sessions.get(where.id);
+        if (!existing) throw new Error("session not found");
+        db.sessions.delete(where.id);
+        return withParticipants(db, existing);
       },
     },
     $transaction: async (fn: (tx: any) => Promise<any>) => {

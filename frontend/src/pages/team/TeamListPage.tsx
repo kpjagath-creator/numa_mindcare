@@ -7,8 +7,9 @@ import TeamTable from "../../components/team/TeamTable";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import EditTeamMemberModal from "../../components/team/EditTeamMemberModal";
 import type { TeamMember } from "../../types/index";
-import { listTeamMembers, deleteTeamMember } from "../../api/teamMembers";
+import { listTeamMembers, deleteTeamMember, updateTeamMember } from "../../api/teamMembers";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { useToast } from "../../components/ui/Toast";
 import { useAuth } from "../../auth/AuthContext";
@@ -28,9 +29,11 @@ export default function TeamListPage() {
   const { showToast } = useToast();
   const { hasPermission } = useAuth();
   const canCreateTeamMember = hasPermission("team:create");
+  const canEditTeamMember = hasPermission("team:update");
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<TeamMember | null>(null);
 
   async function loadMembers() {
     setLoading(true);
@@ -45,6 +48,20 @@ export default function TeamListPage() {
   }
 
   useEffect(() => { void loadMembers(); }, []);
+
+  // `email` is omitted rather than sent blank when the field is empty: the backend validates it
+  // with Zod `.email()`, which would reject "", and an existing therapist with no address must
+  // stay saveable so an admin can still fix their name or active status.
+  async function handleSaveEdit(
+    id: number,
+    payload: { name: string; employee_type: "psychologist" | "psychiatrist"; email: string; is_active: boolean }
+  ) {
+    const { email, ...rest } = payload;
+    await updateTeamMember(id, { ...rest, ...(email ? { email } : {}) });
+    setEditing(null);
+    void loadMembers();
+    showToast("Team member updated.", "success");
+  }
 
   async function handleDelete(id: number) {
     try {
@@ -84,6 +101,7 @@ export default function TeamListPage() {
               </span>
             </div>
             <div className="mobile-card-subtitle">{m.employeeCode}</div>
+            {m.email && <div className="mobile-card-subtitle">{m.email}</div>}
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
               <div style={{
                 width: 8, height: 8, borderRadius: "50%",
@@ -103,6 +121,14 @@ export default function TeamListPage() {
           >
             View Patients
           </button>
+          {canEditTeamMember && (
+            <button
+              style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1.5px solid #3D9E8E", background: "#EEF9F7", color: "#3D9E8E", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              onClick={() => setEditing(m)}
+            >
+              Edit
+            </button>
+          )}
           <button
             style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1.5px solid #DC2626", background: "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
             onClick={() => setShowDeleteConfirm(true)}
@@ -164,6 +190,14 @@ export default function TeamListPage() {
             +
           </button>
         )}
+
+        {editing && (
+          <EditTeamMemberModal
+            member={editing}
+            onSave={(payload) => handleSaveEdit(editing.id, payload)}
+            onClose={() => setEditing(null)}
+          />
+        )}
       </Layout>
     );
   }
@@ -192,7 +226,19 @@ export default function TeamListPage() {
           onAction={() => navigate("/team/new")}
         />
       ) : (
-        <TeamTable members={members} onDelete={handleDelete} />
+        <TeamTable
+          members={members}
+          onDelete={handleDelete}
+          onEdit={canEditTeamMember ? setEditing : undefined}
+        />
+      )}
+
+      {editing && (
+        <EditTeamMemberModal
+          member={editing}
+          onSave={(payload) => handleSaveEdit(editing.id, payload)}
+          onClose={() => setEditing(null)}
+        />
       )}
     </Layout>
   );

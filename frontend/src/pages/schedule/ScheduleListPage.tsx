@@ -5,12 +5,13 @@ import { useNavigate } from "react-router-dom";
 import Layout from "../../components/layout/Layout";
 import AddSessionModal from "../../components/schedule/AddSessionModal";
 import SessionsTable from "../../components/schedule/SessionsTable";
+import SessionMeetingCell from "../../components/schedule/SessionMeetingCell";
 import ClinicalNotesPanel from "../../components/schedule/ClinicalNotesPanel";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import type { TherapySession, PaginationMeta, Patient, TeamMember, PaymentStatus } from "../../types/index";
-import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus } from "../../api/therapySessions";
+import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus, retryMeeting } from "../../api/therapySessions";
 import { listPatients } from "../../api/patients";
 import { listTeamMembers } from "../../api/teamMembers";
 import { useToast } from "../../components/ui/Toast";
@@ -148,6 +149,17 @@ export default function ScheduleListPage() {
     catch { showToast("Failed to update payment status.", "error"); }
   }
 
+  async function handleRetryMeeting(id: number) {
+    try {
+      const updated = await retryMeeting(id);
+      void fetchSessions();
+      showToast(
+        updated.meetingStatus === "ACTIVE" ? "Google Meet link generated." : "Could not generate the meeting. Please try again.",
+        updated.meetingStatus === "ACTIVE" ? "success" : "error"
+      );
+    } catch { showToast("Failed to retry meeting generation.", "error"); }
+  }
+
   function resetFilters() {
     setPatientFilter(""); setTherapistFilter(""); setDateFilter(""); setStatusFilter(undefined); setPage(1);
   }
@@ -237,6 +249,14 @@ export default function ScheduleListPage() {
           </svg>
           <PaymentPill status={sess.paymentStatus} />
         </div>
+
+        {/* Google Meet (MEET-01) — mirrors the desktop table's Google Meet column */}
+        {sess.meetingStatus && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", marginBottom: 4 }}>Google Meet</div>
+            <SessionMeetingCell session={sess} onRetry={handleRetryMeeting} layout="block" />
+          </div>
+        )}
 
         {sess.notes && (
           <div style={{ fontSize: 13, color: "#64748B", marginTop: 6, fontStyle: "italic", background: "#F8FAFC", borderRadius: 8, padding: "6px 10px" }}>
@@ -641,6 +661,7 @@ export default function ScheduleListPage() {
                 onNoShow={handleNoShow}
                 onPaymentStatusChange={handlePaymentStatusChange}
                 onNotes={(session) => setNotesSession(session)}
+                onRetryMeeting={handleRetryMeeting}
               />
 
               {totalPages > 1 && (

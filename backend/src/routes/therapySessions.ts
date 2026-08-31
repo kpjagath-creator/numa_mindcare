@@ -12,6 +12,7 @@ import {
   rescheduleSession,
   markNoShow,
   updatePaymentStatus,
+  retryMeeting,
 } from "../controllers/therapySessionsController";
 import { requirePermission } from "../middleware/requirePermission";
 
@@ -25,6 +26,7 @@ router.patch("/:id/cancel", requirePermission("sessions:update"), cancelSession)
 router.patch("/:id/complete", requirePermission("sessions:update"), completeSession);
 router.post("/:id/reschedule", requirePermission("sessions:update"), rescheduleSession);
 router.patch("/:id/no-show", requirePermission("sessions:update"), markNoShow);
+router.post("/:id/meeting/retry", requirePermission("sessions:update"), retryMeeting);
 router.patch("/:id/payment-status", requirePermission("billing:update"), updatePaymentStatus);
 router.delete("/:id", requirePermission("sessions:delete"), deleteSession);
 

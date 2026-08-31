@@ -12,8 +12,40 @@ vi.mock("../../lib/prisma", async () => {
   return { default: client };
 });
 
+// The Google Calendar boundary is mocked at the module edge — this suite is about scheduling
+// behaviour, and no test in this repo ever reaches the real Google API. Default resolutions are a
+// "not configured" no-op so the pre-existing tests below are unaffected by MEET-01; the
+// integration-specific tests at the bottom of the file override them per case.
+vi.mock("../sessionMeetingService", () => ({
+  MEETING_PROVIDER_GOOGLE: "google_meet",
+  provisionSessionMeeting: vi.fn(async () => ({
+    meetingProvider: "google_meet",
+    googleEventId: null,
+    meetingLink: null,
+    meetingStatus: "FAILED",
+    meetingError: "Google Calendar is not configured.",
+  })),
+  cancelSessionMeeting: vi.fn(async () => ({
+    meetingProvider: null,
+    googleEventId: null,
+    meetingLink: null,
+    meetingStatus: null,
+    meetingError: null,
+  })),
+  retrySessionMeeting: vi.fn(async () => ({
+    meetingProvider: null,
+    googleEventId: null,
+    meetingLink: null,
+    meetingStatus: null,
+    meetingError: null,
+  })),
+}));
+
 import prismaMock from "../../lib/prisma";
-import { createSession, completeSession, rescheduleSession } from "../therapySessionsService";
+import * as sessionMeetingService from "../sessionMeetingService";
+import { createSession, completeSession, rescheduleSession, cancelSession } from "../therapySessionsService";
+
+const meetingMock = vi.mocked(sessionMeetingService);
 
 const db: FakeDb = (prismaMock as any).__db;
 const client: any = prismaMock;
@@ -25,11 +57,12 @@ function seedPatient(id: number, currentStatus: string) {
     patientNumber: `P${String(id).padStart(4, "0")}`,
     currentStatus,
     therapistId: null,
+    email: `patient${id}@example.test`,
   });
 }
 
 function seedTherapist(id: number) {
-  db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist", isActive: true });
+  db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist", isActive: true, email: `therapist${id}@example.test` });
   // Wide-open availability (every day, all day) — this suite exercises lifecycle transitions, not
   // Capability 2's availability-aware scheduling, which has its own dedicated tests below and in
   // therapySessionsService.integration.test.ts.
@@ -193,7 +226,7 @@ describe("therapySessionsService — availability-aware scheduling (SCH-04, SCH-
   });
 
   function seedNarrowTherapist(id: number, opts?: { isActive?: boolean }) {
-    db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist", isActive: opts?.isActive ?? true });
+    db.teamMembers.set(id, { id, name: `Therapist ${id}`, employeeType: "psychologist", isActive: opts?.isActive ?? true, email: `therapist${id}@example.test` });
   }
 
   it("rejects a session for a therapist with no configured availability", async () => {
@@ -314,5 +347,182 @@ describe("therapySessionsService — availability-aware scheduling (SCH-04, SCH-
         session_type: "discovery",
       })
     ).rejects.toMatchObject({ statusCode: 409 });
+  });
+});
+
+// ── Google Calendar / Meet integration at the scheduling boundary (MEET-01) ────────────────────
+//
+// The critical invariant: scheduling is never contingent on Google. These tests exercise
+// `createSession` end-to-end with the meeting boundary mocked, asserting that the session row is
+// created and committed identically whether provisioning succeeds or fails.
+
+describe("therapySessionsService — Google Meet integration (MEET-01)", () => {
+  beforeEach(() => {
+    db.reset();
+    seedTherapist(1);
+    vi.clearAllMocks();
+  });
+
+  it("returns the Meet link on the created session when provisioning succeeds", async () => {
+    seedPatient(1, "started_therapy");
+    meetingMock.provisionSessionMeeting.mockResolvedValueOnce({
+      meetingProvider: "google_meet",
+      googleEventId: "evt-1",
+      meetingLink: "https://meet.google.com/abc-defg-hij",
+      meetingStatus: "ACTIVE",
+      meetingError: null,
+    });
+
+    const session = await createSession({
+      patient_id: 1,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    expect(session.meetingStatus).toBe("ACTIVE");
+    expect(session.meetingLink).toBe("https://meet.google.com/abc-defg-hij");
+    expect(db.sessions.get(session.id)!.status).toBe("upcoming");
+  });
+
+  it("still schedules the session when Google provisioning fails", async () => {
+    seedPatient(2, "started_therapy");
+    meetingMock.provisionSessionMeeting.mockResolvedValueOnce({
+      meetingProvider: "google_meet",
+      googleEventId: null,
+      meetingLink: null,
+      meetingStatus: "FAILED",
+      meetingError: "Google Calendar event creation failed (403).",
+    });
+
+    const session = await createSession({
+      patient_id: 2,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "12:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    // The session exists, is upcoming, and the failure is recorded alongside it — not raised.
+    expect(session.id).toBeDefined();
+    expect(session.status).toBe("upcoming");
+    expect(session.meetingStatus).toBe("FAILED");
+    expect(db.sessions.get(session.id)).toBeDefined();
+    expect(db.sessions.get(session.id)!.status).toBe("upcoming");
+  });
+
+  it("does not roll back the session when the meeting boundary throws unexpectedly", async () => {
+    seedPatient(3, "started_therapy");
+    meetingMock.provisionSessionMeeting.mockRejectedValueOnce(new Error("unexpected integration crash"));
+
+    const session = await createSession({
+      patient_id: 3,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "14:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    expect(session.status).toBe("upcoming");
+    expect(db.sessions.get(session.id)!.status).toBe("upcoming");
+  });
+
+  it("still advances patient lifecycle status when Google provisioning fails", async () => {
+    seedPatient(4, "created");
+    meetingMock.provisionSessionMeeting.mockResolvedValueOnce({
+      meetingProvider: "google_meet",
+      googleEventId: null,
+      meetingLink: null,
+      meetingStatus: "FAILED",
+      meetingError: "Google Calendar is not configured.",
+    });
+
+    await createSession({
+      patient_id: 4,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "16:00",
+      duration_mins: 30,
+      session_type: "discovery",
+    });
+
+    // The lifecycle transition committed with the session, independent of Google.
+    expect(db.patients.get(4)!.currentStatus).toBe("discovery_scheduled");
+  });
+
+  it("marks the session PENDING inside the transaction and calls Google only after it commits", async () => {
+    seedPatient(5, "started_therapy");
+    let statusAtCallTime: string | null | undefined;
+    meetingMock.provisionSessionMeeting.mockImplementationOnce(async (id: number) => {
+      // By the time the boundary is invoked the row must already be committed and visible.
+      statusAtCallTime = db.sessions.get(id)?.meetingStatus;
+      return { meetingProvider: "google_meet", googleEventId: "evt-9", meetingLink: "https://meet.google.com/x", meetingStatus: "ACTIVE" as const, meetingError: null };
+    });
+
+    await createSession({
+      patient_id: 5,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "18:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    expect(statusAtCallTime).toBe("PENDING");
+  });
+
+  it("cancels the old calendar event and provisions a new one when a session is rescheduled", async () => {
+    seedPatient(6, "started_therapy");
+    meetingMock.provisionSessionMeeting.mockResolvedValue({
+      meetingProvider: "google_meet",
+      googleEventId: "evt-new",
+      meetingLink: "https://meet.google.com/new-link",
+      meetingStatus: "ACTIVE",
+      meetingError: null,
+    });
+
+    const original = await createSession({
+      patient_id: 6,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "20:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    const rescheduled = await rescheduleSession(original.id, {
+      session_date: "2026-09-02",
+      start_time: "20:00",
+      duration_mins: 60,
+    });
+
+    // Reschedule creates a *new* session row, so the calendar follows: the original's event is
+    // cancelled and a fresh one is provisioned for the successor.
+    expect(meetingMock.cancelSessionMeeting).toHaveBeenCalledWith(original.id);
+    expect(meetingMock.provisionSessionMeeting).toHaveBeenCalledWith(rescheduled.id);
+    expect(rescheduled.id).not.toBe(original.id);
+    expect(db.sessions.get(original.id)!.status).toBe("rescheduled");
+  });
+
+  it("keeps the Numa cancellation when the Google cancellation fails", async () => {
+    seedPatient(7, "started_therapy");
+    const session = await createSession({
+      patient_id: 7,
+      therapist_id: 1,
+      session_date: "2026-09-01",
+      start_time: "22:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+    meetingMock.cancelSessionMeeting.mockRejectedValueOnce(new Error("Google cancellation failed (503)."));
+
+    const cancelled = await cancelSession(session.id, { reason: "Patient unwell" });
+
+    expect(cancelled.status).toBe("cancelled");
+    expect(db.sessions.get(session.id)!.status).toBe("cancelled");
   });
 });

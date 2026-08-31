@@ -73,14 +73,29 @@ export interface TeamMember {
   employeeCode: string;
   name: string;
   employeeType: EmployeeType;
+  // Nullable: therapist records created before MEET-01 have no email.
+  email: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
+// Email is required on new onboarding (enforced in teamMemberValidators). The column is
+// nullable so pre-existing therapist records without one keep working - see UpdateTeamMemberInput.
 export interface CreateTeamMemberInput {
   name: string;
   employee_type: EmployeeType;
+  email: string;
+}
+
+// Therapist update (MEET-01). Every field optional - a partial update, mirroring
+// UpdatePatientInfoInput. `email` is what lets an admin add an address to a pre-existing
+// therapist record that has none.
+export interface UpdateTeamMemberInput {
+  name?: string;
+  employee_type?: EmployeeType;
+  email?: string;
+  is_active?: boolean;
 }
 
 // ── Service input types ────────────────────────────────────────────────────────
@@ -120,6 +135,12 @@ export type PaymentStatus = "unpaid" | "paid" | "partial";
 
 export type SessionType = "therapy" | "discovery";
 
+// Google Calendar / Meet integration (MEET-01). Conceptual state of the external calendar
+// event that represents a session. A null column value means no meeting was ever attempted
+// (sessions created before this feature); CANCELLED means the external event is gone.
+export const MEETING_STATUSES = ["PENDING", "ACTIVE", "FAILED", "CANCELLED"] as const;
+export type MeetingStatus = (typeof MEETING_STATUSES)[number];
+
 export interface TherapySession {
   id: number;
   patientId: number;
@@ -137,6 +158,13 @@ export interface TherapySession {
   noShowFee: number | null;
   rescheduledFromId: number | null;
   notes: string | null;
+  // Google Calendar / Meet integration state (MEET-01). Null across the board on sessions
+  // that predate the feature, or where provisioning was never attempted.
+  meetingProvider: string | null;
+  googleEventId: string | null;
+  meetingLink: string | null;
+  meetingStatus: MeetingStatus | null;
+  meetingError: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

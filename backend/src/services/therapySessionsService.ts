@@ -3,6 +3,13 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { transitionPatientStatus } from "./patientLifecycleService";
+import {
+  cancelSessionMeeting,
+  provisionSessionMeeting,
+  retrySessionMeeting,
+  MEETING_PROVIDER_GOOGLE,
+  type SessionMeetingState,
+} from "./sessionMeetingService";
 import type { TherapySession, CreateSessionInput, CancelSessionInput, CompleteSessionInput, ListSessionsQuery, PaginatedResult, RescheduleSessionInput, NoShowSessionInput, UpdatePaymentStatusInput } from "../types/index";
 
 // ── Shared include shape ───────────────────────────────────────────────────────
@@ -42,6 +49,30 @@ function isExclusionViolation(err: unknown): boolean {
 
 const RACE_CONFLICT_MESSAGE =
   "This slot was just booked by another request. Please choose a different time slot.";
+
+// ── Google Calendar / Meet integration seam (MEET-01) ──────────────────────────
+//
+// Scheduling owns the session; `sessionMeetingService` owns the external calendar projection of
+// it. Two rules hold at this seam and are the whole point of it:
+//
+//   1. Google is called only *after* the enclosing `prisma.$transaction` has committed — never
+//      inside it. An external HTTP call inside a transaction would hold a database connection
+//      open for the round-trip and make the session's existence contingent on Google being up.
+//   2. Google failure never invalidates a scheduled session. The meeting functions are total by
+//      contract (they record FAILED and resolve rather than throw); this helper is a second belt
+//      so an unexpected throw still cannot propagate into the scheduling path and surface as a
+//      failed booking for a session that is, in fact, booked.
+async function attachMeeting(
+  session: TherapySession,
+  run: () => Promise<SessionMeetingState>
+): Promise<TherapySession> {
+  try {
+    return { ...session, ...(await run()) };
+  } catch (err) {
+    console.error(`[meeting] session ${session.id}: unexpected integration error`, err);
+    return session;
+  }
+}
 
 // ── Availability-aware scheduling (SCH-04, SCH-20) ─────────────────────────────
 //
@@ -101,7 +132,7 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
   }
   const endDt = new Date(startDt.getTime() + input.duration_mins * 60 * 1000);
 
-  return prisma.$transaction(async (tx) => {
+  const session = await prisma.$transaction(async (tx) => {
     const patient = await tx.patient.findUnique({ where: { id: input.patient_id } });
     if (!patient) throw Object.assign(new Error(`Patient with id ${input.patient_id} not found`), { statusCode: 404 });
 
@@ -160,6 +191,10 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
           sessionType,
           status: "upcoming",
           notes: input.notes ?? null,
+          // Records the intent to provision a Google meeting. This is a local column write, not
+          // a Google call — the API call itself happens after this transaction commits.
+          meetingStatus: "PENDING",
+          meetingProvider: MEETING_PROVIDER_GOOGLE,
         },
         include: sessionInclude,
       });
@@ -191,6 +226,10 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
 
     return mapSession(session);
   });
+
+  // Transaction has committed — the session is scheduled and stays scheduled regardless of what
+  // Google does next.
+  return attachMeeting(session, () => provisionSessionMeeting(session.id));
 }
 
 // ── listSessions ───────────────────────────────────────────────────────────────
@@ -248,7 +287,11 @@ export async function cancelSession(id: number, input: CancelSessionInput): Prom
     data: { status: "cancelled", cancelReason: input.reason },
     include: sessionInclude,
   });
-  return mapSession(updated);
+
+  // The Numa cancellation is already committed and is never rolled back — if Google's
+  // cancellation fails, the session stays cancelled and the integration records the failure for
+  // a later retry.
+  return attachMeeting(mapSession(updated), () => cancelSessionMeeting(id));
 }
 
 // ── completeSession ────────────────────────────────────────────────────────────
@@ -296,6 +339,12 @@ export async function completeSession(id: number, input: CompleteSessionInput): 
 
 export async function deleteSession(id: number): Promise<void> {
   await getSessionById(id);
+  // Delete is a hard delete — cancel the external event first, or it would be orphaned as a live
+  // appointment on the patient's and therapist's calendars with no Numa row left to retry from.
+  // Best-effort by contract: a Google failure must not block deleting the Numa session.
+  await cancelSessionMeeting(id).catch((err) =>
+    console.error(`[meeting] session ${id}: unexpected integration error on delete`, err)
+  );
   await prisma.therapySession.delete({ where: { id } });
 }
 
@@ -334,7 +383,7 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
   }
   const endDt = new Date(startDt.getTime() + input.duration_mins * 60 * 1000);
 
-  return prisma.$transaction(async (tx) => {
+  const newSession = await prisma.$transaction(async (tx) => {
     const therapist = await tx.teamMember.findUnique({ where: { id: original.teamMemberId } });
     if (!therapist) throw Object.assign(new Error(`Team member with id ${original.teamMemberId} not found`), { statusCode: 404 });
 
@@ -385,9 +434,9 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
     }
 
     // Create new session with rescheduledFromId = original.id
-    let newSession;
+    let created;
     try {
-      newSession = await tx.therapySession.create({
+      created = await tx.therapySession.create({
         data: {
           patientId: original.patientId,
           teamMemberId: original.teamMemberId,
@@ -398,6 +447,9 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
           status: "upcoming",
           notes: input.notes ?? original.notes ?? null,
           rescheduledFromId: original.id,
+          // Local column write only — Google is called after this transaction commits.
+          meetingStatus: "PENDING",
+          meetingProvider: MEETING_PROVIDER_GOOGLE,
         },
         include: sessionInclude,
       });
@@ -406,8 +458,34 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
       throw err;
     }
 
-    return mapSession(newSession);
+    return mapSession(created);
   });
+
+  // Transaction has committed. Rescheduling here creates a *new* session row and leaves the
+  // original as a real, queryable `rescheduled` record (see ARCHITECTURE.md §6.5) — so the
+  // calendar must follow the same shape: cancel the original's event (Google notifies the
+  // attendees) and provision a fresh one for the successor. Updating the original event in place
+  // would leave two Numa sessions pointing at one Google event and break the 1:1 mapping that
+  // cancellation and retry idempotency depend on.
+  //
+  // Ordering is deliberate: cancel first, so a failure to provision the new event can never
+  // leave *two* live appointments on the attendees' calendars.
+  await cancelSessionMeeting(original.id).catch((err) =>
+    console.error(`[meeting] session ${original.id}: unexpected integration error on reschedule`, err)
+  );
+
+  return attachMeeting(newSession, () => provisionSessionMeeting(newSession.id));
+}
+
+// ── retryMeeting (MEET-01) ─────────────────────────────────────────────────────
+
+/**
+ * Admin-triggered retry of a failed Google Meet provisioning. Idempotent — never creates a second
+ * calendar event for a session that already has one.
+ */
+export async function retryMeeting(id: number): Promise<TherapySession> {
+  const session = await getSessionById(id); // 404 guard
+  return attachMeeting(session, () => retrySessionMeeting(id));
 }
 
 // ── markNoShow (F3) ────────────────────────────────────────────────────────────
@@ -482,6 +560,11 @@ function mapSession(raw: any): TherapySession {
     noShowFee: raw.noShowFee !== null && raw.noShowFee !== undefined ? Number(raw.noShowFee) : null,
     rescheduledFromId: raw.rescheduledFromId ?? null,
     notes: raw.notes,
+    meetingProvider: raw.meetingProvider ?? null,
+    googleEventId: raw.googleEventId ?? null,
+    meetingLink: raw.meetingLink ?? null,
+    meetingStatus: raw.meetingStatus ?? null,
+    meetingError: raw.meetingError ?? null,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };

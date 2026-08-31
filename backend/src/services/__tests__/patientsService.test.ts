@@ -26,6 +26,7 @@ describe("patientsService.updatePatientStatus (manual lifecycle transitions via 
       patientNumber: "P0001",
       currentStatus: "started_therapy",
       therapistId: null,
+    email: "patient@example.test",
     });
   });
 

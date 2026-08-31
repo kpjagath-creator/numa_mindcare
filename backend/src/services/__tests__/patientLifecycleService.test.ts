@@ -18,6 +18,7 @@ describe("transitionPatientStatus (Patient Lifecycle capability)", () => {
       patientNumber: `P${String(id).padStart(4, "0")}`,
       currentStatus,
       therapistId: null,
+    email: "patient@example.test",
     });
   }
 

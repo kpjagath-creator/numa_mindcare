@@ -22,23 +22,33 @@ function setAdminName(name: string) {
 interface FormValues {
   name: string;
   employee_type: EmployeeType | "";
+  email: string;
 }
 
 interface FormErrors {
   name?: string;
   employee_type?: string;
+  email?: string;
 }
 
+// Client-side shape check only — the backend's Zod `.email()` is the authoritative validation.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Email is required on new onboarding (MEET-01) so the therapist can be added as an attendee on
+// session calendar invitations. Existing therapist records without one stay valid and are
+// repaired through the team list edit form.
 function validate(v: FormValues): FormErrors {
   const errs: FormErrors = {};
   if (!v.name.trim()) errs.name = "Name is required.";
   if (!v.employee_type) errs.employee_type = "Employee type is required.";
+  if (!v.email.trim()) errs.email = "Email is required.";
+  else if (!EMAIL_PATTERN.test(v.email.trim())) errs.email = "Enter a valid email address.";
   return errs;
 }
 
 export default function AddTeamMemberPage() {
   const navigate = useNavigate();
-  const [values, setValues] = useState<FormValues>({ name: "", employee_type: "" });
+  const [values, setValues] = useState<FormValues>({ name: "", employee_type: "", email: "" });
   const [errors, setErrors] = useState<FormErrors>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -60,6 +70,7 @@ export default function AddTeamMemberPage() {
       await createTeamMember({
         name: values.name.trim(),
         employee_type: values.employee_type as EmployeeType,
+        email: values.email.trim(),
       });
       navigate("/team");
     } catch {
@@ -94,6 +105,15 @@ export default function AddTeamMemberPage() {
                 <option value="psychologist">Psychologist</option>
                 <option value="psychiatrist">Psychiatrist</option>
               </select>
+            </Field>
+            <Field label="Email *" error={errors.email}>
+              <input
+                type="email"
+                style={s.input}
+                value={values.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                placeholder="meera.nair@example.com"
+              />
             </Field>
           </div>
           <div style={s.actions}>

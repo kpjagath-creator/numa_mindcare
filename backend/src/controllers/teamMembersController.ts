@@ -2,7 +2,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import * as teamMembersService from "../services/teamMembersService";
-import { createTeamMemberSchema } from "../validators/teamMemberValidators";
+import { createTeamMemberSchema, updateTeamMemberSchema } from "../validators/teamMemberValidators";
 import { sendSuccess } from "../utils/responseHelper";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -42,6 +42,18 @@ export async function getTeamMember(req: Request, res: Response, next: NextFunct
     const id = parseId(req.params.id, res);
     if (id === null) return;
     const member = await teamMembersService.getTeamMemberById(id);
+    sendSuccess(res, { member });
+  } catch (err) { next(err); }
+}
+
+// ── PUT /api/v1/team-members/:id ──────────────────────────────────────────────
+
+export async function editTeamMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = parseId(req.params.id, res);
+    if (id === null) return;
+    const input = updateTeamMemberSchema.parse(req.body);
+    const member = await teamMembersService.updateTeamMember(id, input);
     sendSuccess(res, { member });
   } catch (err) { next(err); }
 }

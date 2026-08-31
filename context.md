@@ -146,6 +146,12 @@ Auto-restarts on any `.ts` file change. Runs on port **3001**.
   notes?: string;
   charges?: number;
   rescheduledFromId?: number;     // set when this session is a reschedule of another
+  // MEET-01 Google Calendar / Meet integration state. All null on sessions predating the feature.
+  meetingProvider: string | null;   // "google_meet"
+  googleEventId: string | null;     // external Calendar event id (UNIQUE index in Postgres)
+  meetingLink: string | null;       // https://meet.google.com/xxx-xxxx-xxx
+  meetingStatus: "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED" | null;
+  meetingError: string | null;      // surfaced to admins behind the FAILED state
   patient: { id: number; name: string };
   therapist: { id: number; name: string };
 }
@@ -452,7 +458,44 @@ Exports:
 
 ---
 
+### Google Meet integration (MEET-01, added 2026-09-01)
+
+Two backend files, one frontend component, in a strict dependency chain:
+
+```
+therapySessionsService.ts  →  sessionMeetingService.ts  →  googleCalendarService.ts  →  Google
+   (scheduling rules)         (integration policy)           (HTTP only)
+```
+
+**`googleCalendarService.ts`** — the only module aware Google exists. Hand-written `fetch` client (no `googleapis` dependency; needs Node >= 20). Exposes `createEventWithMeet`, `cancelEvent`, `isGoogleCalendarConfigured`, `getCalendarTimeZone`. Handles OAuth token refresh with an in-process access-token cache. **Never logs tokens or credentials.**
+
+**`sessionMeetingService.ts`** — owns the meeting columns on `TherapySession` and the policy around them. Three total (never-throwing) entry points:
+
+| Function | Called from | Behaviour |
+|---|---|---|
+| `provisionSessionMeeting(id)` | `createSession`, `rescheduleSession` (after commit) | Creates event + Meet, invites available attendees, compare-and-swaps the result. No-ops if `googleEventId` is already set, or the session is not `upcoming`. |
+| `cancelSessionMeeting(id)` | `cancelSession`, `deleteSession`, `rescheduleSession` (on the original) | Deletes the event (Google notifies attendees), clears the dead link. On failure keeps `googleEventId` + records `meetingError` for a later retry. |
+| `retrySessionMeeting(id)` | `POST /:id/meeting/retry` | Clears the stale error, then re-provisions. Idempotent. |
+
+**`SessionMeetingCell.tsx`** (frontend) — one component rendering all three admin-visible states, used by **both** the desktop `SessionsTable` and the mobile `MobileSessionCard` in `ScheduleListPage`, so the two branches cannot drift (see CLAUDE.md rule #2):
+
+| `meetingStatus` | UI |
+|---|---|
+| `ACTIVE` | the Meet link + `Copy Link` |
+| `FAILED` | “⚠ Unable to generate meeting” + `Retry` (hover shows `meetingError`) |
+| `PENDING` / `CANCELLED` | muted em-dash |
+| `null` | muted em-dash (sessions predating the feature) |
+
+**Gotchas.**
+- Provisioning is synchronous within the request, so `PENDING` is effectively invisible in normal operation — it only persists if a process died mid-flight. No loading state was added for it.
+- Attendees are best-effort. A missing patient or therapist email does **not** fail provisioning; that person is simply not invited.
+- The event title carries no patient name and no clinical content — deliberately, see SPEC.md.
+- Local dev without Google env vars is a supported path: sessions schedule normally and land on `FAILED` with a “not configured” error, which is exactly what the Retry UI is for.
+
+---
+
 ## 8. API Endpoints
+
 
 All prefixed with `/api/v1`:
 
@@ -466,7 +509,9 @@ All prefixed with `/api/v1`:
 | `PATCH` | `/therapy-sessions/:id/cancel` | Cancel session |
 | `PATCH` | `/therapy-sessions/:id/no-show` | Mark no-show |
 | `PATCH` | `/therapy-sessions/:id/payment-status` | Update payment status |
-| `DELETE` | `/therapy-sessions/:id` | Delete session |
+| `POST` | `/therapy-sessions/:id/meeting/retry` | Retry Google Meet generation (MEET-01) — no body, idempotent, `sessions:update` |
+| `DELETE` | `/therapy-sessions/:id` | Delete session (also cancels the Google Calendar event) |
+| `PUT` | `/team-members/:id` | Edit therapist (MEET-01) — partial: `name?`, `employee_type?`, `email?`, `is_active?`, `team:update` |
 | `GET` | `/therapy-sessions/therapist/:id` | Sessions by therapist |
 
 ---

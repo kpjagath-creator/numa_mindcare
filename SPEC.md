@@ -9,11 +9,11 @@ Staff-only tool, accessed via username/password login. Centralized permission-ba
 ## 2. Core entities
 
 - **Patient** — a person moving through the clinic's intake-to-therapy lifecycle. Has a unique patient number, contact info, source/referral info, a current status, and an optional assigned therapist.
-- **Team member** — a therapist or other staff member. Has a unique employee code, type, active flag, weekly recurring availability, and one-off blockout dates (leave/holiday).
+- **Team member** — a therapist or other staff member. Has a unique employee code, type, active flag, an optional email address (required for new records, absent on some older ones), weekly recurring availability, and one-off blockout dates (leave/holiday).
 - **Therapy session** — a scheduled appointment between a patient and a therapist. Two kinds:
   - **Discovery call** — free intake call, no charges, clinical notes required on completion.
   - **Therapy session** — billable, charges optional per session.
-  Sessions carry a status (upcoming/completed/cancelled/no_show), payment status, optional charges, and support rescheduling (which chains to the original via `rescheduledFromId`).
+  Sessions carry a status (upcoming/completed/cancelled/no_show), payment status, optional charges, and support rescheduling (which chains to the original via `rescheduledFromId`). A session also carries the state of its external Google Calendar event (provider, event id, Meet link, meeting status, error) — see "Google Meet sessions" below.
 - **Clinical note** — free-form note attached to a completed session, attributed to the author. Starts as a **draft** (editable/deletable); once **signed**, its content, author, and signature are immutable, and further changes are recorded as append-only **amendments** that never alter the original signed text.
 - **Patient status log** — audit trail of every status change (who, when, previous → new, optional notes).
 
@@ -54,8 +54,23 @@ The session's `sessionType` field ("discovery" vs "therapy") is the single sourc
 - **Booking is concurrency-safe**: two simultaneous requests for the same patient/therapist and overlapping time can never both succeed — enforced at the database level (see ARCHITECTURE.md §6.4), not just by an application-level check.
 - **Booking (and rescheduling) is availability-aware**: a session may only be created for an active therapist, within one of their configured weekly availability windows, and not on a one-off blocked-out date. The Schedule page's "Add Session" form shows a live availability indicator for the selected therapist/date/time as a UX aid; the backend independently re-validates and is the sole source of truth.
 
+### Google Meet sessions & calendar invitations
+Scheduling a session also creates a Google Calendar event with a Google Meet conference, using a dedicated Numa Google account.
+
+- **Automatic on scheduling.** After a session is created (and after the database transaction commits), Numa creates a calendar event, generates a Meet link, adds the patient and assigned therapist as attendees, and stores the resulting link against the session.
+- **Google Calendar sends the invitations.** Numa builds no email of its own — no templates, no preview, no invitation editor. The calendar invitation the attendees receive is Google's.
+- **Scheduling never depends on Google.** If any part of the integration fails — bad credentials, API outage, Google unconfigured — the session is still scheduled and remains fully valid. The failure is recorded against the session, not raised to the admin as a booking error.
+- **Meeting status** is one of `PENDING` → `ACTIVE` / `FAILED` (and `CANCELLED` once the event is removed). Sessions created before this feature have no meeting status at all.
+- **Admins can copy the Meet link** from the session row, and **retry generation** when it failed. Retry is idempotent — it never creates a second calendar event or a second Meet link for the same session.
+- **Privacy.** The calendar event carries only "Therapy Session — Numa MindCare" or "Discovery Call — Numa MindCare". No patient name, diagnosis, clinical notes, charges, or any other clinical detail leaves Numa. Attendees cannot see each other's contact details or modify the event.
+- **Missing emails degrade gracefully.** If the patient or the therapist has no email, the session is still scheduled and the Meet link is still generated — that person simply isn't added as an attendee. The other attendee is still invited.
+- **Rescheduling** cancels the original session's calendar event (Google notifies attendees) and creates a fresh event with a new Meet link for the successor session, matching how rescheduling creates a new session record.
+- **Cancellation** cancels the calendar event and Google notifies attendees. If Google's cancellation fails, the Numa session stays cancelled and the integration records the failure for a later retry — the cancellation is never undone.
+- **Not in scope for this MVP:** resending invitations, invitation delivery tracking, custom emails or templates, and any separate invitation-management UI. Google Calendar sends the initial invitation when the event is created; that is the whole of Numa's invitation behaviour.
+
 ### Team / availability
-- Manage team members (create, list, view a therapist's assigned patients).
+- Manage team members (create, list, edit, view a therapist's assigned patients).
+- **Therapist email**: required when onboarding a new team member, so they can be invited to session calendar events. Therapist records created before this rule may have no email and remain fully supported — an admin can add or change one through the team edit form, which also covers name, employee type, and active status.
 - Set weekly recurring availability slots per therapist.
 - Record one-off blockout dates (leave/holidays) per therapist.
 
@@ -80,8 +95,8 @@ All endpoints require an authenticated session except `POST /auth/login`. Each e
 |---|---|---|
 | Auth | `/auth` | `POST /login`, `POST /logout`, `GET /me`, `POST /change-password` |
 | Patients | `/patients` | CRUD, `PATCH /:id/status`, `PATCH /:id/therapist`, `GET /:id/status-logs`, `GET /:id/timeline` |
-| Team members | `/team-members` | CRUD-ish, `GET /:id/patients` |
-| Therapy sessions | `/therapy-sessions` | create/list/get/delete, `/:id/cancel`, `/:id/complete`, `/:id/reschedule`, `/:id/no-show`, `/:id/payment-status`, `/therapist/:id` |
+| Team members | `/team-members` | CRUD-ish, `PUT /:id`, `GET /:id/patients` |
+| Therapy sessions | `/therapy-sessions` | create/list/get/delete, `/:id/cancel`, `/:id/complete`, `/:id/reschedule`, `/:id/no-show`, `/:id/payment-status`, `/:id/meeting/retry`, `/therapist/:id` |
 | Analytics | `/analytics` | `GET /dashboard`, `GET /revenue` |
 | Availability | `/availability` | `PUT/GET /therapist/:id/slots`, `POST/GET /therapist/:id/blockouts`, `DELETE /blockouts/:id` |
 | Clinical notes | `/clinical-notes` | `POST/GET /session/:sessionId`, `PUT/DELETE /:id`, `PATCH /:id/sign`, `POST /:id/amendments` |
@@ -106,5 +121,6 @@ All routes except `/login` require an authenticated session. Every page renders 
 - No multi-tenant / multi-clinic support.
 - No patient-facing UI — staff tool only.
 - No payment processing integration — payment status is tracked manually, not charged automatically.
+- No invitation resend, delivery tracking, custom invitation emails, or email-provider integration — Google Calendar sends the initial invitation and that is all (see "Google Meet sessions & calendar invitations").
 - No SOAP-structured clinical notes — free-form text only.
 - Single role in active use today, though the permission model supports more.

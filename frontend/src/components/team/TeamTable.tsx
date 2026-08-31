@@ -8,6 +8,7 @@ import ConfirmDialog from "../ui/ConfirmDialog";
 interface Props {
   members: TeamMember[];
   onDelete?: (id: number) => void;
+  onEdit?: (member: TeamMember) => void;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -23,7 +24,7 @@ function initials(name: string): string {
   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 }
 
-function TeamRow({ m, onDelete }: { m: TeamMember; onDelete?: (id: number) => void }) {
+function TeamRow({ m, onDelete, onEdit }: { m: TeamMember; onDelete?: (id: number) => void; onEdit?: (member: TeamMember) => void }) {
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const avatar = roleAvatarColor(m.employeeType);
@@ -48,6 +49,11 @@ function TeamRow({ m, onDelete }: { m: TeamMember; onDelete?: (id: number) => vo
         </td>
         <td style={s.td}>{TYPE_LABELS[m.employeeType] ?? m.employeeType}</td>
         <td style={s.td}>
+          {m.email
+            ? m.email
+            : <span style={{ color: "#b8c4cc" }}>{"2014"}</span>}
+        </td>
+        <td style={s.td}>
           <span style={{ ...s.badge, ...(m.isActive ? s.active : s.inactive) }}>
             {m.isActive ? "Active" : "Inactive"}
           </span>
@@ -58,6 +64,11 @@ function TeamRow({ m, onDelete }: { m: TeamMember; onDelete?: (id: number) => vo
           </button>
         </td>
         <td style={{ ...s.td, whiteSpace: "nowrap" }}>
+          {onEdit && (
+            <button style={s.editBtn} onClick={() => onEdit(m)}>
+              Edit
+            </button>
+          )}
           {onDelete && (
             <button style={s.deleteBtn} onClick={() => setShowConfirm(true)}>
               Delete
@@ -79,7 +90,7 @@ function TeamRow({ m, onDelete }: { m: TeamMember; onDelete?: (id: number) => vo
   );
 }
 
-export default function TeamTable({ members, onDelete }: Props) {
+export default function TeamTable({ members, onDelete, onEdit }: Props) {
   if (members.length === 0) {
     return <p style={{ color: "#94A3B8", fontSize: 13, padding: "40px 0", textAlign: "center" }}>No team members found.</p>;
   }
@@ -89,14 +100,14 @@ export default function TeamTable({ members, onDelete }: Props) {
       <table style={s.table}>
         <thead>
           <tr style={s.headRow}>
-            {["", "Name", "Employee Type", "Status", "Patients", "Actions"].map((h, i) => (
+            {["", "Name", "Employee Type", "Email", "Status", "Patients", "Actions"].map((h, i) => (
               <th key={i} style={s.th}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {members.map((m) => (
-            <TeamRow key={m.id} m={m} onDelete={onDelete} />
+            <TeamRow key={m.id} m={m} onDelete={onDelete} onEdit={onEdit} />
           ))}
         </tbody>
       </table>
@@ -114,5 +125,6 @@ const s: Record<string, React.CSSProperties> = {
   active:     { background: "#DCFCE7", color: "#16A34A" },
   inactive:   { background: "#F1F5F9", color: "#94A3B8" },
   patientsBtn: { padding: "5px 13px", border: "1.5px solid #3D9E8E", borderRadius: 7, background: "transparent", color: "#3D9E8E", fontSize: 12, cursor: "pointer", fontWeight: 600, marginRight: 6 },
+  editBtn:     { padding: "5px 13px", border: "1.5px solid #3D9E8E", borderRadius: 7, background: "transparent", color: "#3D9E8E", fontSize: 12, cursor: "pointer", fontWeight: 600, marginRight: 6 },
   deleteBtn:   { padding: "5px 13px", border: "1.5px solid #DC2626", borderRadius: 7, background: "transparent", color: "#DC2626", fontSize: 12, cursor: "pointer", fontWeight: 600 },
 };

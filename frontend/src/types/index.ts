@@ -59,6 +59,9 @@ export interface TeamMember {
   employeeCode: string;
   name: string;
   employeeType: EmployeeType;
+  // Nullable: therapist records created before MEET-01 have no email. New onboarding requires
+  // one; existing records can have one added through the team edit form.
+  email: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -79,6 +82,10 @@ export type PaymentStatus = "unpaid" | "paid" | "partial";
 
 export type SessionType = "therapy" | "discovery";
 
+// Google Calendar / Meet integration state (MEET-01). null = no meeting was ever attempted
+// (sessions predating the feature); CANCELLED = the external event has been removed.
+export type MeetingStatus = "PENDING" | "ACTIVE" | "FAILED" | "CANCELLED";
+
 export interface TherapySession {
   id: number;
   patientId: number;
@@ -96,6 +103,11 @@ export interface TherapySession {
   noShowFee: number | null;
   rescheduledFromId: number | null;
   notes: string | null;
+  meetingProvider: string | null;
+  googleEventId: string | null;
+  meetingLink: string | null;
+  meetingStatus: MeetingStatus | null;
+  meetingError: string | null;
   createdAt: string;
   updatedAt: string;
 }

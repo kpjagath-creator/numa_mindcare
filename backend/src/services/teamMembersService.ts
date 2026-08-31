@@ -3,7 +3,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { generateEmployeeCode } from "../utils/generateCodes";
-import type { TeamMember, Patient, CreateTeamMemberInput } from "../types/index";
+import type { TeamMember, Patient, CreateTeamMemberInput, UpdateTeamMemberInput } from "../types/index";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -20,7 +20,12 @@ export async function createTeamMember(input: CreateTeamMemberInput): Promise<Te
     return await prisma.$transaction(async (tx) => {
       const employeeCode = await generateEmployeeCode(tx);
       const member = await tx.teamMember.create({
-        data: { employeeCode, name: input.name, employeeType: input.employee_type },
+        data: {
+          employeeCode,
+          name: input.name,
+          employeeType: input.employee_type,
+          email: input.email,
+        },
       });
       return member as TeamMember;
     });
@@ -53,6 +58,30 @@ export async function getTeamMemberById(id: number): Promise<TeamMember> {
   const member = await prisma.teamMember.findUnique({ where: { id } });
   if (member === null) throw makeNotFoundError(id);
   return member as TeamMember;
+}
+
+// ── updateTeamMember (MEET-01) ─────────────────────────────────────────────────
+//
+// Partial update, mirroring `updatePatientInfo` in patientsService.ts. Its reason for existing is
+// that therapist records created before the Google Calendar integration have no email, and an
+// admin needs a way to add one — but the endpoint is a general therapist edit, not an
+// email-only side door, so name/type/active status are editable too.
+//
+// Every field is optional and only present keys are written: omitting `email` leaves an existing
+// address untouched rather than clearing it.
+
+export async function updateTeamMember(id: number, input: UpdateTeamMemberInput): Promise<TeamMember> {
+  await getTeamMemberById(id); // 404 guard
+  const updated = await prisma.teamMember.update({
+    where: { id },
+    data: {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.employee_type !== undefined && { employeeType: input.employee_type }),
+      ...(input.email !== undefined && { email: input.email }),
+      ...(input.is_active !== undefined && { isActive: input.is_active }),
+    },
+  });
+  return updated as TeamMember;
 }
 
 // ── deleteTeamMember ───────────────────────────────────────────────────────────
