@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Layout from "../../components/layout/Layout";
 import { getDashboardStats, DashboardStats } from "../../api/analytics";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { fmtClinicTime } from "../../lib/clinicTime";
 
 // ── Uniform teal color for all therapist bars ──────────────────────────────
 const THERAPIST_BAR = "linear-gradient(90deg, #3D9E8E, #4BBCAC)";
@@ -26,7 +27,7 @@ function fmtRupees(n: number): string {
 }
 
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  return fmtClinicTime(iso);
 }
 
 function fmtDuration(mins: number): string {

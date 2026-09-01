@@ -5,6 +5,7 @@ import Layout from "../../components/layout/Layout";
 import { getRevenueStats, RevenueStats, MiniSession } from "../../api/analytics";
 import { completeSession } from "../../api/therapySessions";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { fmtClinicDate } from "../../lib/clinicTime";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,7 @@ function fmtRupees(n: number): string {
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return fmtClinicDate(iso);
 }
 
 function fmtDuration(mins: number): string {
@@ -25,6 +26,9 @@ function fmtDuration(mins: number): string {
 
 function shortMonth(label: string): string {
   // label = "2026-01"
+  // Deliberately not routed through clinicTime (TZ-01): this turns a "YYYY-MM" label into a month
+  // name and never touches an instant. Construction and formatting both use the local zone, so
+  // the month is always the one in the label whatever timezone the viewer is in.
   const [y, m] = label.split("-");
   const date = new Date(Number(y), Number(m) - 1, 1);
   return date.toLocaleDateString("en-IN", { month: "short" });

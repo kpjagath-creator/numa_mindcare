@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getNotesForSession, createNote, updateNote, signNote, addAmendment } from "../../api/clinicalNotes";
 import type { ClinicalNote } from "../../api/clinicalNotes";
 import { useAuth } from "../../auth/AuthContext";
+import { fmtClinicDate, fmtClinicDateTime } from "../../lib/clinicTime";
 
 function getAdminName(): string {
   try { const s = localStorage.getItem("admin_name"); if (s) return s; } catch {}
@@ -18,7 +19,7 @@ interface Props {
 }
 
 function fmtDT(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return fmtClinicDateTime(iso);
 }
 
 export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate, onClose }: Props) {
@@ -164,7 +165,7 @@ export default function ClinicalNotesPanel({ sessionId, patientName, sessionDate
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Session Note</div>
               <div style={{ fontSize: 11, color: "#64748b", marginTop: 3 }}>
-                {patientName} · {new Date(sessionDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                {patientName} · {fmtClinicDate(sessionDate)}
               </div>
             </div>
             <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8", padding: "2px 6px", lineHeight: 1 }}>✕</button>

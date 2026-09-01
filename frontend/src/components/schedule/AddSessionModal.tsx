@@ -8,6 +8,7 @@ import { createSession, getTherapistSessions } from "../../api/therapySessions";
 import { getAvailability, getBlockouts } from "../../api/availability";
 import type { AvailabilitySlot, BlockoutEntry } from "../../api/availability";
 import SearchableSelect from "../ui/SearchableSelect";
+import { dayOfWeekForDate, fmtClinicDate, fmtClinicDateOnly, fmtClinicTime } from "../../lib/clinicTime";
 
 interface Props {
   onClose: () => void;
@@ -37,10 +38,10 @@ const DURATION_OPTIONS = [
 ];
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return fmtClinicTime(iso);
 }
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return fmtClinicDate(iso);
 }
 
 export default function AddSessionModal({ onClose, onCreated, initialPatientId, initialSessionType }: Props) {
@@ -175,7 +176,9 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
     if (!form.therapist_id || !form.session_date || !form.start_time || !form.duration_mins) return { kind: "unknown" };
     if (availabilitySlots === null || blockouts === null) return { kind: "unknown" };
 
-    const dayOfWeek = new Date(`${form.session_date}T12:00:00`).getDay();
+    // Deterministic weekday for the chosen clinic date (TZ-01). This preview is a UX aid only —
+    // the backend re-validates availability and remains the source of truth.
+    const dayOfWeek = dayOfWeekForDate(form.session_date);
     const [h, m] = form.start_time.split(":").map(Number);
     const endMins = h * 60 + m + parseInt(form.duration_mins, 10);
     const endStr = `${String(Math.floor(endMins / 60) % 24).padStart(2, "0")}:${String(endMins % 60).padStart(2, "0")}`;
@@ -356,7 +359,7 @@ export default function AddSessionModal({ onClose, onCreated, initialPatientId, 
               <div style={s.scheduleHeader}>
                 <strong style={{ color: "#0F172A", fontSize: 12 }}>
                   {selectedTherapist?.name}'s sessions
-                  {form.session_date ? ` on ${new Date(form.session_date + "T12:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}` : ""}
+                  {form.session_date ? ` on ${fmtClinicDateOnly(form.session_date)}` : ""}
                 </strong>
                 <button type="button" style={s.collapseBtn} onClick={() => setShowTherapistSchedule(false)}>Hide</button>
               </div>

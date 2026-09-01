@@ -15,6 +15,11 @@ services:
         value: https://numa-mindcare.vercel.app
       - key: NODE_ENV
         value: production
+      # Clinic timezone (TZ-01). Scheduling converts clinic wall-clock input to absolute instants
+      # explicitly, so correctness does not depend on the container's timezone — but stating it
+      # here keeps the deployment self-documenting.
+      - key: CLINIC_TIME_ZONE
+        value: Asia/Kolkata
       # Google Calendar / Meet integration (MEET-01). Secrets - set in the Render dashboard,
       # never committed. See backend/.env.example for the OAuth production-publishing
       # prerequisite (refresh tokens expire after 7 days while the app is in "Testing").

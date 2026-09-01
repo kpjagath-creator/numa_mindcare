@@ -10,26 +10,22 @@ const sessionInclude = {
 } as const;
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
+//
+// Every bucket boundary here is a **clinic** calendar boundary (TZ-01). These previously used
+// `getFullYear()`/`getMonth()`/`getDate()`/`getDay()`, which read the *server's* timezone — on
+// Render (UTC) "today" would have started at 05:30 IST, so a 9am clinic session would have been
+// counted against the previous day, and the same query would answer differently depending on
+// where the backend ran. `session.startTime` is an absolute instant, so the comparison bounds
+// must be the instants at which the clinic's day/week/month actually begin and end.
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-}
-function endOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-}
-function startOfWeek(d: Date): Date {
-  // Monday-based week
-  const day = d.getDay(); // 0=Sun
-  const diff = (day === 0 ? -6 : 1 - day);
-  const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff, 0, 0, 0, 0);
-  return mon;
-}
-function endOfWeek(d: Date): Date {
-  const mon = startOfWeek(d);
-  return new Date(mon.getTime() + 6 * 24 * 60 * 60 * 1000 + 23 * 3600 * 1000 + 59 * 60 * 1000 + 59 * 1000 + 999);
-}
-function startOfMonth(y: number, m: number): Date { return new Date(y, m, 1, 0, 0, 0, 0); }
-function endOfMonth(y: number, m: number): Date   { return new Date(y, m + 1, 0, 23, 59, 59, 999); }
+import { clinicDayBoundsOf, clinicMonthBounds, clinicParts, clinicWeekBounds } from "../lib/clinicTime";
+
+function startOfDay(d: Date): Date { return clinicDayBoundsOf(d).start; }
+function endOfDay(d: Date): Date { return clinicDayBoundsOf(d).end; }
+function startOfWeek(d: Date): Date { return clinicWeekBounds(d).start; }
+function endOfWeek(d: Date): Date { return clinicWeekBounds(d).end; }
+function startOfMonth(y: number, m: number): Date { return clinicMonthBounds(y, m).start; }
+function endOfMonth(y: number, m: number): Date { return clinicMonthBounds(y, m).end; }
 
 // Converts groupBy status result into { completed, cancelled, upcoming }
 function statusCounts(groups: { status: string; _count: { _all: number } }[]) {
@@ -50,11 +46,15 @@ export async function getDashboardStats() {
   const todayEnd = endOfDay(now);
   const wkStart  = startOfWeek(now);
   const wkEnd    = endOfWeek(now);
-  const mStart   = startOfMonth(now.getFullYear(), now.getMonth());
-  const mEnd     = endOfMonth(now.getFullYear(), now.getMonth());
+  // Which calendar month "now" falls in is itself a clinic question — near midnight IST the
+  // server's UTC clock is still on the previous day, and at month boundaries the previous month.
+  const nowClinic = clinicParts(now);
+  const monthIndex = nowClinic.month - 1; // clinicParts is 1-12; month bounds take 0-based
+  const mStart   = startOfMonth(nowClinic.year, monthIndex);
+  const mEnd     = endOfMonth(nowClinic.year, monthIndex);
   // Last month
-  const lmStart  = startOfMonth(now.getFullYear(), now.getMonth() - 1);
-  const lmEnd    = endOfMonth(now.getFullYear(), now.getMonth() - 1);
+  const lmStart  = startOfMonth(nowClinic.year, monthIndex - 1);
+  const lmEnd    = endOfMonth(nowClinic.year, monthIndex - 1);
 
   const [
     totalActivePatients,
@@ -163,13 +163,13 @@ export async function getRevenueStats() {
 
   // Last 6 months (including current)
   const months: { label: string; start: Date; end: Date }[] = [];
+  const nowClinic = clinicParts(now);
   for (let i = 5; i >= 0; i--) {
-    const y = now.getFullYear();
-    const m = now.getMonth() - i;
-    // Normalise negative months
-    const date = new Date(y, m, 1);
-    const year  = date.getFullYear();
-    const month = date.getMonth();
+    // Offset can go negative; normalise the same way `clinicMonthBounds` does so the label and
+    // the bounds always describe the same month.
+    const offset = nowClinic.month - 1 - i;
+    const year = nowClinic.year + Math.floor(offset / 12);
+    const month = ((offset % 12) + 12) % 12;
     const label = `${year}-${String(month + 1).padStart(2, "0")}`;
     months.push({ label, start: startOfMonth(year, month), end: endOfMonth(year, month) });
   }

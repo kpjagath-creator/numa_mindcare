@@ -2,16 +2,14 @@
 // Renders all past status changes ordered newest-first.
 
 import type { PatientStatusLog } from "../../types/index";
+import { fmtClinicDateTime } from "../../lib/clinicTime";
 
 interface Props {
   logs: PatientStatusLog[];
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+  return fmtClinicDateTime(iso);
 }
 
 function statusLabel(s: string | null) {

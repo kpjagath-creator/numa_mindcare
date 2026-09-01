@@ -7,6 +7,7 @@ import AddSessionModal from "../../components/schedule/AddSessionModal";
 import SessionsTable from "../../components/schedule/SessionsTable";
 import SessionMeetingCell from "../../components/schedule/SessionMeetingCell";
 import { retryMeetingToast, serverMessage } from "../../components/schedule/meetingToast";
+import { fmtClinicDayMonth, fmtClinicTime, fmtClinicWeekday } from "../../lib/clinicTime";
 import ClinicalNotesPanel from "../../components/schedule/ClinicalNotesPanel";
 import SkeletonTable from "../../components/ui/SkeletonTable";
 import EmptyState from "../../components/ui/EmptyState";
@@ -24,11 +25,8 @@ const LIMIT = 50;
 type SortKey = "startTime" | "patientName" | "therapistName" | "status" | "paymentStatus";
 
 function fmtDateTime(iso: string): string {
-  const d = new Date(iso);
-  const weekday = d.toLocaleDateString("en-IN", { weekday: "short" });
-  const day = d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-  const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-  return `${weekday}, ${day} · ${time}`;
+  // Clinic time, not the viewer's browser time (TZ-01).
+  return `${fmtClinicWeekday(iso)}, ${fmtClinicDayMonth(iso)} · ${fmtClinicTime(iso)}`;
 }
 
 function StatusPill({ status }: { status: string }) {

@@ -4,10 +4,14 @@ import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 
+import { fmtClinicDayMonth, fmtClinicWeekday } from "../../lib/clinicTime";
+
 interface Props { title?: string; onMenuClick?: () => void; }
 
 function getTodayLabel(): string {
-  return new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  // The clinic's today, not the viewer's (TZ-01) — these differ either side of midnight IST.
+  const now = new Date();
+  return `${fmtClinicWeekday(now)}, ${fmtClinicDayMonth(now)}`;
 }
 
 function initialsOf(name: string): string {

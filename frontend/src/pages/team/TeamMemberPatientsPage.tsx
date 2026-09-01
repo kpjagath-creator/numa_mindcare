@@ -6,6 +6,7 @@ import Layout from "../../components/layout/Layout";
 import Breadcrumb from "../../components/ui/Breadcrumb";
 import PatientStatusBadge from "../../components/patients/PatientStatusBadge";
 import Spinner from "../../components/ui/Spinner";
+import { fmtClinicDate } from "../../lib/clinicTime";
 import type { Patient, TeamMember, TherapySession } from "../../types/index";
 import { getTeamMember, getTeamMemberPatients } from "../../api/teamMembers";
 import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus } from "../../api/therapySessions";
@@ -20,7 +21,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return fmtClinicDate(iso);
 }
 
 export default function TeamMemberPatientsPage() {

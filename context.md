@@ -458,6 +458,35 @@ Exports:
 
 ---
 
+### Clinic timezone (TZ-01, added 2026-09-01)
+
+Every date/time in the product means **clinic** wall-clock time (`Asia/Kolkata`). Two mirrored
+modules own the conversion; nothing else may do it implicitly.
+
+| File | Owns |
+|---|---|
+| `backend/src/lib/clinicTime.ts` | wall clock → instant (`clinicWallClockToUtc`), instant → clinic parts (`clinicParts`), clinic day/week/month bounds, `formatClinicTime` |
+| `frontend/src/lib/clinicTime.ts` | display only — `fmtClinicTime/Date/DateTime/Weekday/DayMonth`, `fmtClinicDateOnly`, `dayOfWeekForDate` |
+
+**The two rules.** Never `new Date("2026-09-15T10:00:00")` for a session time — no offset means
+server-local. Never `getHours()`/`getDay()`/`getFullYear()`/`toDateString()`/bare
+`toLocaleTimeString()` on a session instant — all server- or browser-local.
+
+**Why it matters.** `render.yaml` sets no `TZ` and Render containers are UTC, so the old implicit
+parse stored a 10:00 booking as 10:00Z (15:30 IST). The UI rendered that wrongly, and a Google
+invitation would have told the patient the wrong time.
+
+**Where conversion happens now:** `createSession`/`rescheduleSession` (parse),
+`assertTherapistAvailable` (weekday + HH:MM against the TEXT availability columns),
+`listSessions`/`getTherapistSessions` (date filter), the four conflict messages, and
+`analyticsService` day/week/month buckets. `therapist_blockouts` needed no change — it was
+already pinned to UTC midnight on both write and read.
+
+**Exempt on purpose:** `BillingPage.shortMonth` turns a "YYYY-MM" label into a month name and
+never touches an instant.
+
+---
+
 ### Google Meet integration (MEET-01, added 2026-09-01)
 
 Two backend files, one frontend component, in a strict dependency chain:

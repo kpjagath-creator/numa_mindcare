@@ -16,6 +16,7 @@ import PatientTimeline from "../../components/patients/PatientTimeline";
 import { listTeamMembers } from "../../api/teamMembers";
 import { listSessions, cancelSession, completeSession, deleteSession, rescheduleSession, markNoShow, updatePaymentStatus, retryMeeting } from "../../api/therapySessions";
 import { retryMeetingToast, serverMessage } from "../../components/schedule/meetingToast";
+import { fmtClinicDate, fmtClinicDateTime } from "../../lib/clinicTime";
 import { getNotesForSession } from "../../api/clinicalNotes";
 import type { ClinicalNote } from "../../api/clinicalNotes";
 import SessionsTable from "../../components/schedule/SessionsTable";
@@ -47,7 +48,7 @@ function setAdminName(name: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return fmtClinicDateTime(iso);
 }
 
 function CollapsibleCard({
@@ -512,7 +513,7 @@ export default function PatientProfilePage() {
                 <div key={note.id} style={{ fontSize: 12, color: "#334155", background: "#FDFBF8", padding: "8px 10px", borderRadius: 6, borderLeft: "2px solid #3D9E8E" }}>
                   <p style={{ margin: 0, marginBottom: 4 }}>{note.content.length > 100 ? note.content.substring(0, 100) + "..." : note.content}</p>
                   <div style={{ fontSize: 10, color: "#94a3b8" }}>
-                    {note.createdByName} · {new Date(note.createdAt).toLocaleDateString("en-IN")}
+                    {note.createdByName} · {fmtClinicDate(note.createdAt)}
                   </div>
                 </div>
               ))}
@@ -718,7 +719,7 @@ export default function PatientProfilePage() {
                     <div key={note.id} style={{ fontSize: 11, color: "#334155", background: "#fdfbf9", padding: 8, borderRadius: 6, borderLeft: "2px solid #3D9E8E" }}>
                       <p style={{ margin: 0, marginBottom: 4, fontWeight: 500 }}>{note.content.length > 80 ? note.content.substring(0, 80) + "..." : note.content}</p>
                       <div style={{ fontSize: 10, color: "#94a3b8" }}>
-                        {note.createdByName} · {new Date(note.createdAt).toLocaleDateString("en-IN")}
+                        {note.createdByName} · {fmtClinicDate(note.createdAt)}
                       </div>
                     </div>
                   ))}
@@ -786,7 +787,7 @@ export default function PatientProfilePage() {
           <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: "16px 20px", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <span style={{ fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "2px 7px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Discovery Notes</span>
-              <span style={{ fontSize: 10, color: "#64748b" }}>by {discoverySession.therapist.name} · {new Date(discoverySession.startTime).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+              <span style={{ fontSize: 10, color: "#64748b" }}>by {discoverySession.therapist.name} · {fmtClinicDate(discoverySession.startTime)}</span>
             </div>
             <p style={{ margin: 0, fontSize: 12, color: "#1e3a5f", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>{discoverySession.notes}</p>
           </div>

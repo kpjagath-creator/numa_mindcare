@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { getAvailability, setAvailability, getBlockouts, createBlockout, deleteBlockout } from "../../api/availability";
 import type { AvailabilitySlot, BlockoutEntry } from "../../api/availability";
 import ConfirmDialog from "../ui/ConfirmDialog";
+import { fmtClinicDateOnly } from "../../lib/clinicTime";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DEFAULT_WORKING_DAYS = [1, 2, 3, 4, 5]; // Mon-Fri
@@ -117,7 +118,7 @@ export default function AvailabilityManager({ therapistId }: Props) {
   }
 
   function formatDate(iso: string) {
-    return new Date(iso + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    return fmtClinicDateOnly(iso);
   }
 
   if (loading) {

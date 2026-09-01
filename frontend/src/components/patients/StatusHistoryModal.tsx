@@ -1,4 +1,5 @@
 import type { PatientStatusLog } from "../../types/index";
+import { fmtClinicDate } from "../../lib/clinicTime";
 
 interface Props {
   open: boolean;
@@ -39,7 +40,7 @@ export default function StatusHistoryModal({ open, logs, onClose }: Props) {
                 {logs.map((log, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid #f0ebe4" }}>
                     <td style={{ padding: "10px 14px", color: "#64748b", whiteSpace: "nowrap" }}>
-                      {new Date(log.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                      {fmtClinicDate(log.createdAt)}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: "#3D9E8E", background: "#e4f2ee", padding: "2px 8px", borderRadius: 20 }}>

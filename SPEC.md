@@ -53,6 +53,7 @@ The session's `sessionType` field ("discovery" vs "therapy") is the single sourc
 - Track per-session payment status.
 - **Booking is concurrency-safe**: two simultaneous requests for the same patient/therapist and overlapping time can never both succeed — enforced at the database level (see ARCHITECTURE.md §6.4), not just by an application-level check.
 - **Booking (and rescheduling) is availability-aware**: a session may only be created for an active therapist, within one of their configured weekly availability windows, and not on a one-off blocked-out date. The Schedule page's "Add Session" form shows a live availability indicator for the selected therapist/date/time as a UX aid; the backend independently re-validates and is the sole source of truth.
+- **All times are clinic times.** Numa is a single-clinic product operating in **Asia/Kolkata**, and every date and time in the product means clinic wall-clock time. A session entered as 15 Sept 2026, 10:00 AM is 10:00 in the clinic — stored as the corresponding absolute instant, displayed back as 10:00, validated against the therapist's 10:00 availability, counted in the clinic's calendar day for analytics, and (once the Google integration is enabled) sent to attendees as 10:00. None of this depends on where the server runs or which timezone a staff member's browser is set to. There are no per-user, per-patient, or per-clinic timezones.
 
 ### Google Meet sessions & calendar invitations
 Scheduling a session also creates a Google Calendar event with a Google Meet conference, using a dedicated Numa Google account.
@@ -121,6 +122,7 @@ All routes except `/login` require an authenticated session. Every page renders 
 ## 7. Non-goals / current scope boundaries
 
 - No multi-tenant / multi-clinic support.
+- No multi-timezone scheduling — one clinic, one timezone (see "All times are clinic times"). No per-user, per-patient, or per-clinic timezone settings.
 - No patient-facing UI — staff tool only.
 - No payment processing integration — payment status is tracked manually, not charged automatically.
 - No invitation resend, delivery tracking, custom invitation emails, or email-provider integration — Google Calendar sends the initial invitation and that is all (see "Google Meet sessions & calendar invitations").

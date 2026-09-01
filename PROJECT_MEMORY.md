@@ -621,6 +621,115 @@ of patients in a calendar invitation. `GOOGLE_CALENDAR_TIMEZONE` does *not* miti
 payload sends `dateTime` as an explicit UTC instant, so Google uses the offset and the `timeZone`
 field is inert. **Do not enable the integration in production until this is resolved.**
 
+## 8h. Scheduling timezone correctness — the clinic-time boundary (TZ-01) (2026-09-01)
+
+**Why this exists.** The MEET-02 review flagged one remaining production blocker before real
+calendar invitations could be enabled: session times were interpreted in the *server's* timezone.
+Phase 1 (this change) fixes forward scheduling. Phase 2 — correcting existing production rows —
+is deliberately separate and not started.
+
+### The bug, precisely
+
+`createSession`/`rescheduleSession` did:
+
+```ts
+new Date(`${session_date}T${start_time}:00`)   // no offset → parsed in the SERVER's timezone
+```
+
+`render.yaml` set no `TZ` and Render containers default to UTC, so a 10:00 booking became
+`10:00Z`. Proven empirically against a real Postgres round-trip:
+
+```
+TZ=UTC            stored "2026-09-15 10:00:00"   read back 2026-09-15T10:00:00.000Z
+TZ=Asia/Kolkata   stored "2026-09-15 04:30:00"   read back 2026-09-15T04:30:00.000Z
+```
+
+Read-back is clean and TZ-independent — the *write* was the problem. Consequences: an IST browser
+already displayed a 10:00 booking as **15:30**, and a Google invitation would have told the patient
+3:30 PM.
+
+### The data model (worth knowing before touching any of this)
+
+The schema mixes two time models, which is why one line was never going to be the fix:
+
+| Store | Type | Meaning |
+|---|---|---|
+| `therapy_sessions.start_time`/`end_time` | `TIMESTAMP(3)` | absolute instant, round-tripped by Prisma as UTC |
+| `therapist_availability.start_time`/`end_time` | `TEXT` ("09:00") | clinic wall clock, no timezone |
+| `therapist_blockouts.block_date` | `TIMESTAMP(3)` | date key pinned to UTC midnight |
+
+`assertTherapistAvailable` is the bridge between the first two, and it used `getDay()`/
+`getHours()` — server-local. That *happened* to agree with the old server-local parsing, so it
+worked by accident. **Fixing only the parse would have broken availability validation**: on Render
+a 10:00 IST session becomes 04:30Z, `getHours()` returns 4, and a 09:00–18:00 window would have
+rejected a perfectly valid booking. Same class of problem in the date filters, the conflict
+messages, and the analytics buckets. That is why this change is broad rather than one line.
+
+`therapist_blockouts` needed no change — already UTC-pinned on both write and read.
+
+### What was built
+
+`backend/src/lib/clinicTime.ts` — the single conversion boundary. `frontend/src/lib/clinicTime.ts`
+mirrors it for display. **No dependency added:** `Intl.DateTimeFormat` with an IANA `timeZone`
+does the whole job in ~30 lines, DST-aware, and Node ≥20 ships full ICU. Luxon/date-fns-tz were
+rejected on the same grounds as `googleapis` — the platform already does this.
+
+Call sites converted: parse ×2, availability (weekday + HH:MM + midnight-crossing), date filters
+×2, conflict messages ×4, analytics day/week/month bounds, and every date/time render in the
+frontend (13 files).
+
+`GOOGLE_CALENDAR_TIMEZONE` now defaults to `CLINIC_TIME_ZONE` rather than carrying its own literal
+— two timezone settings that can silently disagree is a trap.
+
+### Two rules that must not be broken
+
+1. Never build a session instant from a bare datetime string — `new Date("2026-09-15T10:00:00")`
+   is server-local.
+2. Never read a session instant with `getHours()`/`getDay()`/`getFullYear()`/`toDateString()`/
+   bare `toLocaleTimeString()` — all server- or browser-local.
+
+Setting `TZ=Asia/Kolkata` on the host is fine operationally but is **never** the correctness
+mechanism: local, CI, and dev environments would still disagree.
+
+### Verified
+
+Same input, both runtimes, end to end through the real service and database:
+
+```
+15 Sep 2026, 10:00 clinic time
+  TZ=UTC          → 2026-09-15T04:30:00.000Z   stored "2026-09-15 04:30:00"   displays "10:00 am"
+  TZ=Asia/Kolkata → 2026-09-15T04:30:00.000Z   stored "2026-09-15 04:30:00"   displays "10:00 am"
+```
+
+The full suite (127 tests) passes under the default IST runtime **and** under `TZ=UTC`.
+`clinicTime.test.ts` additionally runs conversions in child processes under `TZ=UTC`,
+`Asia/Kolkata` and `America/New_York`, and includes a test that pins the *old* behaviour to show
+it disagreed with itself.
+
+### Existing data — CONFIRMED AFFECTED, not touched
+
+Every session created through the production backend holds an instant **+5h30m** from the clinic
+time the admin entered. This change does not alter a single existing row, by instruction.
+
+Mitigating fact: **no Google event has ever been created** — credentials were never configured, so
+no patient has received a wrong invitation. That window closes the moment credentials are set.
+
+**Do not enable the Google integration until Phase 2 has assessed and corrected existing upcoming
+sessions.** Phase 2 must begin read-only. A safe sizing query (clinic hours are ~09:00–18:00 IST,
+so correct rows cluster at 03:30–12:30 UTC; un-shifted rows cluster at 09:00–18:00):
+
+```sql
+SELECT id, status, start_time,
+       start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata' AS as_ist
+FROM therapy_sessions ORDER BY start_time DESC LIMIT 20;
+```
+
+Notes for whoever does Phase 2: a uniform −5:30 shift preserves relative ordering, so the
+`EXCLUDE` overlap constraints stay satisfied; `created_at`/`updated_at` are genuine instants and
+must **not** be shifted; and rows created from an IST machine (if any) would already be correct,
+so the shift cannot be applied blindly — confirm with the query above against a restored snapshot
+first.
+
 ## 9. Local dev quick-start
 
 ```bash

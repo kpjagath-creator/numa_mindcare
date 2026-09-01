@@ -6,6 +6,7 @@ import type { TherapySession, PaymentStatus } from "../../types/index";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import SessionActionsDropdown from "./SessionActionsDropdown";
 import SessionMeetingCell from "./SessionMeetingCell";
+import { fmtClinicDate, fmtClinicTime } from "../../lib/clinicTime";
 
 interface Props {
   sessions: TherapySession[];
@@ -22,11 +23,11 @@ interface Props {
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return fmtClinicTime(iso);
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return fmtClinicDate(iso);
 }
 
 function fmtDuration(mins: number) {

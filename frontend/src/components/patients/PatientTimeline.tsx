@@ -4,13 +4,14 @@
 // this page.
 
 import type { PatientTimelineEntry, PatientTimelineEntryType } from "../../api/patients";
+import { fmtClinicDateTime } from "../../lib/clinicTime";
 
 interface Props {
   entries: PatientTimelineEntry[];
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return fmtClinicDateTime(iso);
 }
 
 const TYPE_META: Record<PatientTimelineEntryType, { label: string; icon: string; color: string; bg: string }> = {

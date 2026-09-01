@@ -24,6 +24,8 @@
 // required for this single-account use case — an unverified production app shows a one-time
 // consent interstitial and works). See ARCHITECTURE.md and backend/.env.example.
 
+import { CLINIC_TIME_ZONE } from "../lib/clinicTime";
+
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
@@ -116,7 +118,15 @@ export function isGoogleCalendarConfigured(): boolean {
 
 /** IANA zone the clinic books in. Calendar needs an explicit zone — it must not guess. */
 export function getCalendarTimeZone(): string {
-  return process.env.GOOGLE_CALENDAR_TIMEZONE ?? "Asia/Kolkata";
+  // Defaults to the clinic's own zone rather than a second independent literal — two timezone
+  // settings that can silently disagree is a trap, and a session's timezone *is* the clinic's.
+  //
+  // Note what this field does and does not do (TZ-01): `start.dateTime` is sent as an explicit
+  // UTC instant, and an explicit offset always wins, so this `timeZone` does not determine when
+  // the appointment is. Correctness comes from the instant being right. This is accurate metadata
+  // (it is what Calendar shows as the event's zone and what recurrence would expand against),
+  // never a correction mechanism.
+  return process.env.GOOGLE_CALENDAR_TIMEZONE ?? CLINIC_TIME_ZONE;
 }
 
 // ── Access token ───────────────────────────────────────────────────────────────

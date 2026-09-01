@@ -4,6 +4,12 @@ import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma";
 import { transitionPatientStatus } from "./patientLifecycleService";
 import {
+  clinicDayBounds,
+  clinicParts,
+  clinicWallClockToUtc,
+  formatClinicTime,
+} from "../lib/clinicTime";
+import {
   cancelSessionMeeting,
   provisionSessionMeeting,
   retrySessionMeeting,
@@ -97,17 +103,25 @@ async function assertTherapistAvailable(
     throw makeConflictError(`${therapist.name} is not an active therapist and cannot be booked.`);
   }
 
+  // This function is the bridge between the two time models in the schema: session start/end are
+  // absolute instants, while `TherapistAvailability.startTime/endTime` are TEXT wall clocks
+  // ("09:00") and `dayOfWeek` is a clinic weekday. Both sides must therefore be read in *clinic*
+  // time (TZ-01). Using `getDay()`/`getHours()` here would read the server's zone, which happened
+  // to agree with the old server-local parsing — and would start rejecting valid bookings the
+  // moment parsing became timezone-explicit.
+  const startParts = clinicParts(startDt);
+  const endParts = clinicParts(endDt);
+
   // A session that crosses midnight can never fit inside a single weekday's availability window.
-  if (startDt.toDateString() !== endDt.toDateString()) {
+  if (startParts.ymd !== endParts.ymd) {
     throw makeConflictError(
       `${therapist.name} is not available for a session that spans past midnight. Please choose a shorter duration or an earlier start time.`
     );
   }
 
-  const dayOfWeek = startDt.getDay();
-  const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  const startStr = toHHMM(startDt);
-  const endStr = toHHMM(endDt);
+  const dayOfWeek = startParts.dayOfWeek;
+  const startStr = startParts.hhmm;
+  const endStr = endParts.hhmm;
 
   const slots = await tx.therapistAvailability.findMany({ where: { teamMemberId: therapist.id, dayOfWeek } });
   const fitsAvailability = slots.some((slot) => slot.startTime <= startStr && slot.endTime >= endStr);
@@ -130,7 +144,10 @@ async function assertTherapistAvailable(
 // ── createSession ──────────────────────────────────────────────────────────────
 
 export async function createSession(input: CreateSessionInput): Promise<TherapySession> {
-  const startDt = new Date(`${input.session_date}T${input.start_time}:00`);
+  // Clinic wall clock → absolute instant (TZ-01). Never parse a bare datetime string here: it
+  // would be read in the *server's* timezone, so the same booking would land on a different
+  // instant on Render (UTC) than on a developer machine.
+  const startDt = clinicWallClockToUtc(input.session_date, input.start_time);
   if (isNaN(startDt.getTime())) {
     throw Object.assign(new Error("Invalid date or time values"), { statusCode: 400 });
   }
@@ -156,8 +173,8 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
       include: { teamMember: { select: { name: true } } },
     });
     if (patientConflict) {
-      const startStr = patientConflict.startTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-      const endStr = patientConflict.endTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const startStr = formatClinicTime(patientConflict.startTime);
+      const endStr = formatClinicTime(patientConflict.endTime);
       throw makeConflictError(
         `${patient.name} already has a session from ${startStr}–${endStr} with ${patientConflict.teamMember.name}. Please choose a different time slot.`
       );
@@ -174,8 +191,8 @@ export async function createSession(input: CreateSessionInput): Promise<TherapyS
       include: { patient: { select: { name: true } } },
     });
     if (therapistConflict) {
-      const startStr = therapistConflict.startTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-      const endStr = therapistConflict.endTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const startStr = formatClinicTime(therapistConflict.startTime);
+      const endStr = formatClinicTime(therapistConflict.endTime);
       throw makeConflictError(
         `${therapist.name} is already booked from ${startStr}–${endStr} with ${therapistConflict.patient.name}. Please choose a different time slot.`
       );
@@ -249,9 +266,9 @@ export async function listSessions(query: ListSessionsQuery): Promise<PaginatedR
   };
 
   if (date) {
-    const dayStart = new Date(`${date}T00:00:00`);
-    const dayEnd = new Date(`${date}T23:59:59`);
-    where.startTime = { gte: dayStart, lte: dayEnd };
+    // "Sessions on this date" means a clinic calendar day, not a server-local one (TZ-01).
+    const { start, end } = clinicDayBounds(date);
+    where.startTime = { gte: start, lte: end };
   }
 
   const [total, items] = await Promise.all([
@@ -378,10 +395,9 @@ export async function deleteSession(id: number): Promise<void> {
 export async function getTherapistSessions(therapistId: number, date?: string): Promise<TherapySession[]> {
   const where: any = { teamMemberId: therapistId };
   if (date) {
-    where.startTime = {
-      gte: new Date(`${date}T00:00:00`),
-      lte: new Date(`${date}T23:59:59`),
-    };
+    // Clinic calendar day, not a server-local one (TZ-01).
+    const { start, end } = clinicDayBounds(date);
+    where.startTime = { gte: start, lte: end };
   }
   const sessions = await prisma.therapySession.findMany({
     where,
@@ -402,7 +418,10 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
   }
 
   // Compute new times
-  const startDt = new Date(`${input.session_date}T${input.start_time}:00`);
+  // Clinic wall clock → absolute instant (TZ-01). Never parse a bare datetime string here: it
+  // would be read in the *server's* timezone, so the same booking would land on a different
+  // instant on Render (UTC) than on a developer machine.
+  const startDt = clinicWallClockToUtc(input.session_date, input.start_time);
   if (isNaN(startDt.getTime())) {
     throw Object.assign(new Error("Invalid date or time values"), { statusCode: 400 });
   }
@@ -433,8 +452,8 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
       include: { teamMember: { select: { name: true } } },
     });
     if (patientConflict) {
-      const startStr = patientConflict.startTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-      const endStr = patientConflict.endTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const startStr = formatClinicTime(patientConflict.startTime);
+      const endStr = formatClinicTime(patientConflict.endTime);
       throw makeConflictError(
         `${original.patient.name} already has a session from ${startStr}–${endStr} with ${patientConflict.teamMember.name}. Please choose a different time slot.`
       );
@@ -451,8 +470,8 @@ export async function rescheduleSession(id: number, input: RescheduleSessionInpu
       include: { patient: { select: { name: true } } },
     });
     if (therapistConflict) {
-      const startStr = therapistConflict.startTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-      const endStr = therapistConflict.endTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+      const startStr = formatClinicTime(therapistConflict.startTime);
+      const endStr = formatClinicTime(therapistConflict.endTime);
       throw makeConflictError(
         `${original.therapist.name} is already booked from ${startStr}–${endStr} with ${therapistConflict.patient.name}. Please choose a different time slot.`
       );

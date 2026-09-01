@@ -655,3 +655,173 @@ describe("therapySessionsService — Google Calendar lifecycle recovery (MEET-02
     expect(rescheduled.sessionType).toBe("therapy");
   });
 });
+
+// ── Clinic timezone correctness at the scheduling boundary (TZ-01) ─────────────
+//
+// A booking is a clinic wall-clock fact. These assert the instants the service actually persists,
+// which is what the database, the UI and any Google Calendar invitation all derive from.
+
+describe("therapySessionsService — clinic timezone handling (TZ-01)", () => {
+  beforeEach(() => {
+    db.reset();
+    seedTherapist(1);
+    vi.clearAllMocks();
+  });
+
+  it("stores 10:00 clinic time as 04:30 UTC, whatever the server timezone is", async () => {
+    seedPatient(30, "started_therapy");
+
+    const session = await createSession({
+      patient_id: 30,
+      therapist_id: 1,
+      session_date: "2026-09-15",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    // The literal instant — this is what the old server-local parse got wrong on Render.
+    expect(session.startTime.toISOString()).toBe("2026-09-15T04:30:00.000Z");
+  });
+
+  it("derives the end instant in the same frame as the start", async () => {
+    seedPatient(31, "started_therapy");
+
+    const session = await createSession({
+      patient_id: 31,
+      therapist_id: 1,
+      session_date: "2026-09-15",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    expect(session.startTime.toISOString()).toBe("2026-09-15T04:30:00.000Z");
+    expect(session.endTime.toISOString()).toBe("2026-09-15T05:30:00.000Z");
+  });
+
+  it("resolves a rescheduled session's instant in clinic time too", async () => {
+    seedPatient(32, "started_therapy");
+    const original = await createSession({
+      patient_id: 32,
+      therapist_id: 1,
+      session_date: "2026-09-15",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    const rescheduled = await rescheduleSession(original.id, {
+      session_date: "2026-09-16",
+      start_time: "14:30",
+      duration_mins: 45,
+    });
+
+    expect(rescheduled.startTime.toISOString()).toBe("2026-09-16T09:00:00.000Z");
+    expect(rescheduled.endTime.toISOString()).toBe("2026-09-16T09:45:00.000Z");
+  });
+
+  it("validates availability against clinic wall-clock hours, not the stored UTC hours", async () => {
+    // The therapist works 09:00-18:00 clinic time. A 10:00 booking resolves to 04:30 UTC, so a
+    // check that read UTC hours would see "04:30", fall outside the window, and wrongly reject.
+    seedPatient(33, "started_therapy");
+    db.teamMembers.set(2, { id: 2, name: "Therapist 2", employeeType: "psychologist", isActive: true, email: null });
+    for (let dayOfWeek = 0; dayOfWeek <= 6; dayOfWeek++) {
+      db.availabilitySlots.push({ id: db.nextAvailabilityId++, teamMemberId: 2, dayOfWeek, startTime: "09:00", endTime: "18:00" });
+    }
+
+    const session = await createSession({
+      patient_id: 33,
+      therapist_id: 2,
+      session_date: "2026-09-15",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    expect(session.status).toBe("upcoming");
+    expect(session.startTime.toISOString()).toBe("2026-09-15T04:30:00.000Z");
+  });
+
+  it("rejects a booking outside clinic availability", async () => {
+    seedPatient(34, "started_therapy");
+    db.teamMembers.set(3, { id: 3, name: "Therapist 3", employeeType: "psychologist", isActive: true, email: null });
+    for (let dayOfWeek = 0; dayOfWeek <= 6; dayOfWeek++) {
+      db.availabilitySlots.push({ id: db.nextAvailabilityId++, teamMemberId: 3, dayOfWeek, startTime: "09:00", endTime: "18:00" });
+    }
+
+    await expect(
+      createSession({
+        patient_id: 34,
+        therapist_id: 3,
+        session_date: "2026-09-15",
+        start_time: "19:00", // 19:00 clinic time — genuinely outside the window
+        duration_mins: 60,
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("uses the clinic weekday when matching availability", async () => {
+    // 2026-09-15 is a Tuesday in Kolkata. An availability slot for Tuesday only must match.
+    seedPatient(35, "started_therapy");
+    db.teamMembers.set(4, { id: 4, name: "Therapist 4", employeeType: "psychologist", isActive: true, email: null });
+    db.availabilitySlots.push({ id: db.nextAvailabilityId++, teamMemberId: 4, dayOfWeek: 2, startTime: "09:00", endTime: "18:00" });
+
+    const session = await createSession({
+      patient_id: 35,
+      therapist_id: 4,
+      session_date: "2026-09-15",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    expect(session.status).toBe("upcoming");
+  });
+
+  it("still rejects an invalid date or time with a 400", async () => {
+    seedPatient(36, "started_therapy");
+
+    await expect(
+      createSession({
+        patient_id: 36,
+        therapist_id: 1,
+        session_date: "not-a-date",
+        start_time: "10:00",
+        duration_mins: 60,
+        session_type: "therapy",
+      })
+    ).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("hands Google the correctly resolved instants", async () => {
+    seedPatient(37, "started_therapy");
+    let captured: { startTime: Date; endTime: Date } | null = null;
+    meetingMock.provisionSessionMeeting.mockImplementationOnce(async (id: number) => {
+      const row = db.sessions.get(id)!;
+      captured = { startTime: row.startTime, endTime: row.endTime };
+      return {
+        meetingProvider: "google_meet",
+        googleEventId: `numasession${id}`,
+        meetingLink: "https://meet.google.com/abc-defg-hij",
+        meetingStatus: "ACTIVE" as const,
+        meetingError: null,
+      };
+    });
+
+    await createSession({
+      patient_id: 37,
+      therapist_id: 1,
+      session_date: "2026-09-15",
+      start_time: "10:00",
+      duration_mins: 60,
+      session_type: "therapy",
+    });
+
+    // googleCalendarService sends `startTime.toISOString()`, so these are literally the values
+    // that reach `events.insert` — a patient invitation therefore reads 10:00 IST.
+    expect(captured!.startTime.toISOString()).toBe("2026-09-15T04:30:00.000Z");
+    expect(captured!.endTime.toISOString()).toBe("2026-09-15T05:30:00.000Z");
+  });
+});
