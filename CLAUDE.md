@@ -49,6 +49,29 @@ Numa MindCare — internal practice-management web app for a single therapy/ment
 | Clinic timezone conversion (scheduling + display) | `backend/src/lib/clinicTime.ts`, `frontend/src/lib/clinicTime.ts` |
 | Prisma schema | `backend/prisma/schema.prisma` |
 | Render deploy config | `render.yaml` |
+| Production data cleanup / test-dataset seeding (operational scripts) | `backend/src/scripts/cleanupDummyData.ts`, `backend/src/scripts/seedTestDataset.ts` |
+
+## Operational scripts (destructive — read before running)
+
+Two committed scripts manage the production data baseline. Both are **dry-run by default** and both refuse to do anything until you name the target database.
+
+| Script | npm script | What it does |
+|---|---|---|
+| `cleanupDummyData.ts` | `cleanup-dummy-data` | Deletes **all** operational data (patients, sessions, notes, assignments, status logs, team members, availability, blockouts). Preserves `users` and `_prisma_migrations`. |
+| `seedTestDataset.ts` | `seed-test-dataset` | Creates a small fictional test dataset through the real service layer. Refuses to run unless the database is empty of patients/sessions. |
+
+```bash
+# dry run (always rolls back)
+DATABASE_URL="<url>" npm run cleanup-dummy-data -- --confirm-database=<dbname>
+# commit for real
+DATABASE_URL="<url>" npm run cleanup-dummy-data -- --confirm-database=<dbname> --execute
+```
+
+**Safeguards, all four required before anything commits:** dry-run default (`--execute` to commit); `--confirm-database=<name>` must match the database in `DATABASE_URL`; the run aborts if the `users` table is empty (a sign you are pointed at the wrong database); and an orphan scan runs inside the transaction before the commit decision. Credentials are never stored in the scripts — `DATABASE_URL` comes from the environment, and only host/database are printed.
+
+**Take a database snapshot before `--execute`.** The cleanup has no undo once committed, and it has no dummy-only filter by design — it removes *all* operational data, which is also how you remove the seeded test dataset later. Seeded records are recognisable by their `-test.example` emails and `TEST-DATA:` note prefixes.
+
+`seed-test-dataset` refuses to run if `clinicWallClockToUtc` does not resolve 15 Sept 2026 10:00 IST to `04:30Z` — i.e. it will not seed on a build where TZ-01 is missing, which would silently store every session 5h30m late.
 
 ## Deployment
 

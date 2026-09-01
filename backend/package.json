@@ -12,6 +12,8 @@
     "start": "node build/app.js",
     "prisma:generate": "prisma generate",
     "reset-admin-password": "ts-node src/scripts/resetAdminPassword.ts",
+    "cleanup-dummy-data": "ts-node src/scripts/cleanupDummyData.ts",
+    "seed-test-dataset": "ts-node src/scripts/seedTestDataset.ts",
     "test": "vitest run"
   },
   "dependencies": {

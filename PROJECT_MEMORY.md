@@ -730,6 +730,92 @@ must **not** be shifted; and rows created from an IST machine (if any) would alr
 so the shift cannot be applied blindly — confirm with the query above against a restored snapshot
 first.
 
+## 8i. Production data baseline — cleanup and test-dataset scripts (2026-09-01)
+
+**Why.** Production held dummy data created through the pre-TZ-01 backend, so every session
+instant was +5h30m wrong. Rather than correct it (Phase 2), the decision was to delete it and
+start clean — the data had no value. Two committed operational scripts do this repeatably.
+
+### Sequencing — this is the part that matters
+
+An earlier plan had the new test dataset created *before* deploying TZ-01. That would have cleaned
+the corruption and immediately recreated it: production runs `9ae6169`, which still parses session
+times in the server's timezone, and Render is UTC. Verified directly —
+`git show 9ae6169:…/therapySessionsService.ts` still contains
+``new Date(`${input.session_date}T${input.start_time}:00`)`` at two call sites, and
+`backend/src/lib/clinicTime.ts` does not exist in that commit.
+
+The agreed order is therefore:
+
+```
+snapshot -> cleanup -> push MEET-01/MEET-02/TZ-01 -> apply migration
+         -> verify timezone -> seed test dataset -> configure Google last
+```
+
+`seedTestDataset.ts` enforces the ordering itself: it refuses to run unless
+`clinicWallClockToUtc("2026-09-15", "10:00")` resolves to `2026-09-15T04:30:00.000Z`, so it cannot
+seed on a build without TZ-01.
+
+### The scripts
+
+`backend/src/scripts/cleanupDummyData.ts` (`npm run cleanup-dummy-data`) — deletes all operational
+data, preserves `users` and `_prisma_migrations`. Four safeguards, all required: dry-run default
+(`--execute` commits), `--confirm-database=<name>` must match `DATABASE_URL`, aborts if `users` is
+empty, and an orphan scan runs inside the transaction before the commit decision. Everything is one
+interactive transaction — a dry run throws a sentinel to force rollback.
+
+`backend/src/scripts/seedTestDataset.ts` (`npm run seed-test-dataset`) — builds the test dataset
+**through the real service layer** (`patientsService`, `teamMembersService`, `availabilityService`,
+`therapySessionsService`, `clinicalNotesService`), never direct inserts, so identifier generation,
+availability validation, the booking EXCLUDE constraints, lifecycle auto-advance and note sign-off
+all actually run. Refuses to seed a non-empty database.
+
+### Two repository behaviours the dataset had to be shaped around
+
+1. **`completeSession` sets `endTime = now`** for an already-started session. Two completions for
+   the same therapist (or the same patient) therefore both run to "now", their `tsrange`s overlap,
+   and the booking EXCLUDE constraints reject the second. The dataset allows at most one
+   already-started completion per therapist and per patient — hence three therapists for three
+   completed discovery calls. This is repository behaviour, not a workaround.
+2. **Availability is enforced on create.** The first seeding attempt failed with a genuine 409
+   (`Dr. Vikram Sethi is not available at this time`) because a date helper landed on a Sunday and
+   the seeded therapists work Mon–Sat. The helpers now skip Sundays. Worth knowing: the service
+   layer really does validate, so a seeder cannot hand-wave dates.
+
+### Local validation (full Phase B, all passed)
+
+Seeded → dry run showed the expected deletions → **rollback restored everything including
+`users.team_member_id`** → safeguards rejected a missing and a wrong `--confirm-database` even with
+`--execute` present → confirmed cleanup committed → operational tables all zero, `users` preserved
+at 2, all nine orphan checks zero → first new therapist got `EMP-001`, first new patient got `1001`.
+
+That last point is the one that matters for the COUNT-based identifier generators
+(`generateCodes.ts`): they only behave correctly from *empty* tables. Partial deletion permanently
+breaks onboarding — demonstrated earlier: `409 Employee code conflict` on every retry, forever,
+because `COUNT` is stable. **Full deletion is the safe path; never delete a subset.** The
+COUNT-based generator remains a separate architectural risk, out of scope here.
+
+### Dataset shape
+
+3 therapists (`EMP-001`–`003`, Mon–Sat availability), 5 patients (`1001`–`1005`), 9 sessions
+covering all five statuses (upcoming, completed, cancelled, rescheduled, no_show), lifecycle states
+`created` / `discovery_scheduled` / `started_therapy` ×3, 2 clinical notes (one signed with an
+append-only amendment, one draft), payment states paid / partial / unpaid, and a ₹500 no-show fee.
+Includes a fixed timezone probe session at 15 Sept 2026 10:00 IST whose stored instant must be
+`2026-09-15T04:30:00.000Z` — the script asserts this and exits non-zero if it drifts.
+
+All records are recognisably fictional: `@numa-test.example` emails and `TEST-DATA:` note prefixes.
+Removal is `npm run cleanup-dummy-data` — there is deliberately no dummy-only filter, so that
+command clears everything operational.
+
+### Production status at time of writing
+
+Nothing has been run against production. Deployed commit is still `9ae6169`; `63ced69`, `b37afa7`
+and `41d9d0b` remain unpushed; the single pending migration
+(`20260831120000_add_therapist_email_and_session_meeting`) has not been applied. Google credentials
+are not configured and must stay that way until deployment, timezone verification and seeding are
+all complete.
+
 ## 9. Local dev quick-start
 
 ```bash
