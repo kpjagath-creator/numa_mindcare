@@ -83,6 +83,23 @@ function recentClinicWorkday(): string {
   throw new Error("Could not find a recent non-Sunday date — this should be unreachable.");
 }
 
+/**
+ * A future clinic date to block out, skipping Sundays and any date this dataset books a session
+ * on. `assertTherapistAvailable` rejects a booking on a blocked date, so a blockout landing on a
+ * seeded session's date would break that booking — and which dates those are shifts with the day
+ * the script is run. Excluding them keeps the dataset reproducible on any date.
+ */
+function blockoutClinicDate(minDaysAhead: number, taken: Set<string>): string {
+  for (let offset = minDaysAhead; offset < minDaysAhead + 14; offset++) {
+    const p = clinicParts(new Date(Date.now() + offset * 24 * 60 * 60 * 1000));
+    if (p.dayOfWeek === 0) continue; // Sunday — nothing to block out
+    const date = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+    if (taken.has(date)) continue;
+    return date;
+  }
+  throw new Error("Could not find a free non-Sunday blockout date — this should be unreachable.");
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const execute = args.includes("--execute");
@@ -141,6 +158,7 @@ async function main(): Promise<void> {
     console.log("  Sessions (8)     upcoming / completed / cancelled / rescheduled / no-show");
     console.log("  Clinical notes   1 signed + amendment, 1 draft");
     console.log("  Payments         paid, partial, unpaid, plus a no-show fee");
+    console.log("  Blockouts        2 (annual leave, conference) on dates the dataset does not book");
     console.log(`\n  Includes the timezone probe session: ${TZ_PROBE_DATE} ${TZ_PROBE_TIME} clinic time.`);
     console.log("\n  Re-run with --execute to create it.\n");
     await prisma.$disconnect();
@@ -303,6 +321,25 @@ async function main(): Promise<void> {
   });
   log("payments: paid / partial / unpaid across three sessions");
 
+  // ── Therapist blockouts ─────────────────────────────────────────────────────
+  // Created after the sessions above, deliberately: `assertTherapistAvailable` rejects a booking
+  // on a blocked date, so seeding a blockout first could invalidate a booking made later in this
+  // script. The dates also exclude every date the dataset books, so the two never collide.
+  const bookedDates = new Set([today, inThreeDays, inFiveDays, inSevenDays, TZ_PROBE_DATE]);
+  const leaveDate = blockoutClinicDate(10, bookedDates);
+  bookedDates.add(leaveDate);
+  const conferenceDate = blockoutClinicDate(10, bookedDates);
+
+  await availabilityService.createBlockout(ananya.id, {
+    block_date: leaveDate,
+    reason: "TEST-DATA: Annual leave",
+  });
+  await availabilityService.createBlockout(vikram.id, {
+    block_date: conferenceDate,
+    reason: "TEST-DATA: Conference — unavailable all day",
+  });
+  log(`blockouts: ${ananya.name} ${leaveDate} (leave) | ${vikram.name} ${conferenceDate} (conference)`);
+
   // ── Verification ────────────────────────────────────────────────────────────
   const stored = await prisma.therapySession.findUnique({ where: { id: tzProbe.id } });
   const storedIso = stored!.startTime.toISOString();
@@ -317,6 +354,7 @@ async function main(): Promise<void> {
   const summary = {
     team_members: await prisma.teamMember.count(),
     therapist_availability: await prisma.therapistAvailability.count(),
+    therapist_blockouts: await prisma.therapistBlockout.count(),
     patients: await prisma.patient.count(),
     therapy_sessions: await prisma.therapySession.count(),
     clinical_notes: await prisma.clinicalNote.count(),

@@ -800,9 +800,16 @@ COUNT-based generator remains a separate architectural risk, out of scope here.
 3 therapists (`EMP-001`–`003`, Mon–Sat availability), 5 patients (`1001`–`1005`), 9 sessions
 covering all five statuses (upcoming, completed, cancelled, rescheduled, no_show), lifecycle states
 `created` / `discovery_scheduled` / `started_therapy` ×3, 2 clinical notes (one signed with an
-append-only amendment, one draft), payment states paid / partial / unpaid, and a ₹500 no-show fee.
+append-only amendment, one draft), payment states paid / partial / unpaid, a ₹500 no-show fee, and
+2 therapist blockouts (annual leave, conference).
 Includes a fixed timezone probe session at 15 Sept 2026 10:00 IST whose stored instant must be
 `2026-09-15T04:30:00.000Z` — the script asserts this and exits non-zero if it drifts.
+
+The blockouts are created **after** every session, and on dates the dataset does not book.
+`assertTherapistAvailable` rejects a booking on a blocked date (verified: `409 Dr. Ananya Rao is
+unavailable on 2026-09-12 (TEST-DATA: Annual leave)`), so seeding a blockout earlier — or on a
+booked date — would break a later booking. Which dates the dataset books shifts with the day the
+script runs, so `blockoutClinicDate` takes the booked set and skips it.
 
 All records are recognisably fictional: `@numa-test.example` emails and `TEST-DATA:` note prefixes.
 Removal is `npm run cleanup-dummy-data` — there is deliberately no dummy-only filter, so that
